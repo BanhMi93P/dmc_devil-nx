@@ -62,6 +62,7 @@ void Report();  // app/src/cpu/banjo_hot_guest.cpp: at most once every 10 s
 
 // banjo-nx's own renderer defines these (me_native_system.cpp, masseffect_native_draws.cpp); they mean the same job
 // here: the renderer's main thread and its background pipeline compiles.
+REXCVAR_DECLARE(std::string, log_level);  // sdk/src/core/logging.cpp (banjo-nx 2026-11-20, batch #4)
 REXCVAR_DECLARE(int32_t, banjo_ring_core);
 REXCVAR_DECLARE(int32_t, banjo_background_compile_core);
 // banjo-nx (2026-10-27, the user's request: NetherSX2_nx's 4-core mode). See sdk/src/core/threading_switch.h.
@@ -113,6 +114,13 @@ REXCVAR_DECLARE(bool, banjo_renut_delta_prefetch);
 // matched. On deko3d (the console, Ryujinx) the river water was missing with it on and drawn with it off. Why its
 // discard is not the blend's no-op there is not found yet; the native renderer keeps banjo_gpu_blend_skip.
 // banjo-nx (2026-10-26, setter rewrite): d3d_native.h g_touch_compare.
+// banjo-nx (2026-11-20, render-thread batch): the 10 s report's per-draw counts (Latch().counts).
+REXCVAR_DEFINE_BOOL(banjo_renut_draw_counts, true, "Banjo/Renut",
+                    "The 10 s report's per-draw statistics counts (the GPU round's item counts, plume's binds and "
+                    "barriers, the shared and pushed constant counts, the depth counters): a load and a store each, "
+                    "several a draw. Off: those lines show zeros, the render thread saves their work. Always off with "
+                    "log_level \"off\" (the release); this key turns them off with the logs kept (a measured run)")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 REXCVAR_DEFINE_BOOL(banjo_renut_touch_compare, true, "Banjo/Enhancements",
                     "Renut's renderer (2026-10-26): the native D3D setters store a device field and mark its chunk for "
                     "the recording only when the value changes (compare-on-set, as Unleashed's setters), so a recorded "
@@ -948,6 +956,7 @@ void NotePipelineBuilt() {
 
 // The A/B word (banjo_renut_ab); the header reads it inline.
 std::atomic<int> g_ab_off{0};
+int g_ab_off_plain = 0;  // banjo-nx (2026-11-20, batch #3): see the header
 
 namespace {
 
@@ -1133,6 +1142,9 @@ const char *AbName(int target) {
   case 156: return "depth resolves nothing has read left out until something does (vivapinata_depth_resolve_skip_unread; NOT exact in principle; off half: drawn)";
   case 152: return "the pixel shaders' alpha test moved up ahead of the colour arithmetic, constant 977 = 1 (vivapinata_shader_earlykill; off half: the test last)";
   case 151: return "the pixel shaders without Renut's early alpha test, constant 976 = 0 (vivapinata_shader_noearly; off half: the test as before)";
+  // banjo-nx (2026-11-21, ports 246-247): its 300 and 301, numbered below 256 here (port 188).
+  case 170: return "FillTextures' skips: an unasked call's slot compare and copy, a slot answer's epoch buckets while the bind generation holds (port 246; off half: both as before)";
+  case 171: return "Replay's PrefetchShaderBehind skipped for a stage whose shader is the last op's (port 247; off half: both stages prefetched)";
   // blur-nx (2026-11-10/11, port 76; its keys, the same numbers; 210 and 214 not ported).
   case 211: return "an EXPAND resolve sampled as its FLOAT twin through the resolve's texture (blur_renut_expand_alias)";
   case 212: return "a partial resolve keeps a destination of another format and converts (blur_renut_resolve_keep_dest)";
@@ -1173,8 +1185,12 @@ bool g_precise_barriers_on = false;  // banjo_renut_precise_barriers as configur
 namespace {
 
 // banjo-nx (2026-10-20, banjo_renut_ab_targets): the list, read once (numbers 1-31).
+// banjo-nx (2026-11-20): filled under std::call_once, so this file can be built with -fno-threadsafe-statics (its
+// other function statics are plain values from keys); the list and the flag are constant-initialised.
 const std::vector<int> &AbTargets() {
-  static const std::vector<int> list = [] {
+  static std::vector<int> list;
+  static std::once_flag once;
+  std::call_once(once, [] {
     std::vector<int> v;
     const std::string s = REXCVAR_GET(banjo_renut_ab_targets);
     int n = 0;
@@ -1193,8 +1209,8 @@ const std::vector<int> &AbTargets() {
         digit = false;
       }
     }
-    return v;
-  }();
+    list = std::move(v);
+  });
   return list;
 }
 // The target the A/B switches now (requires g_stats.mutex).
@@ -1208,6 +1224,7 @@ int AbTargetLocked() {
 // Render thread: the part as the half says.
 void AbApply(int target, bool on) {
   g_ab_off.store(on ? 0 : target, std::memory_order_relaxed);
+  g_ab_off_plain = on ? 0 : target;  // banjo-nx (2026-11-20, batch #3)
   // banjo-nx (2026-11-20): the GPU round's On() answers follow the half (before ApplyPlume, which asks them)
   if (sasrt::gpu_round::g_latched_ready.load(std::memory_order_acquire))
     sasrt::gpu_round::RefreshEffective();
@@ -1870,9 +1887,7 @@ int Deko3DBackgroundCompileShare() {
 }
 
 
-void CountDepthFloatSampled() {
-  Bump(g_depth_float_sampled, 1);
-}
+// (CountDepthFloatSampled: inline in the header since 2026-11-20)
 
 void CountDrawSource(int source, uint64_t draws) {
   g_draw_source[source].store(g_draw_source[source].load(std::memory_order_relaxed) + draws, std::memory_order_relaxed);
@@ -2040,9 +2055,7 @@ void CountSkippedResolve(bool depth) {
   Bump(g_resolves_skipped[depth ? 1 : 0], 1);
 }
 
-void CountDepthWords(bool viewed) {
-  Bump(viewed ? g_words_viewed : g_words_copied, 1);
-}
+// (CountDepthWords: inline in the header since 2026-11-20)
 
 
 
@@ -2696,6 +2709,8 @@ void LatchTuning() {
   g_latched.small_captures = REXCVAR_GET(banjo_renut_small_captures);
   g_latched.delta_masks = REXCVAR_GET(banjo_renut_delta_masks);
   g_latched.delta_prefetch = REXCVAR_GET(banjo_renut_delta_prefetch);
+  g_latched.counts = REXCVAR_GET(log_level) != "off" && REXCVAR_GET(banjo_renut_draw_counts);  // banjo-nx (2026-11-20, batch #4)
+  g_latched.ready = true;  // banjo-nx (2026-11-20, batch #3): Latch() reads this one
   g_latched_ready.store(true, std::memory_order_release);
 }
 

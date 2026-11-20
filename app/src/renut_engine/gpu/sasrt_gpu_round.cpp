@@ -577,17 +577,18 @@ void LatchNow() {
 }
 
 // banjo-nx (2026-11-20): On()'s answers (see the header): the latched key, and not this item's A/B "off" half.
-std::atomic<uint8_t> g_effective[kCount] = {};  // constant-initialised to 0: not latched
+uint8_t g_effective[kCount] = {};  // constant-initialised to 0: not latched
 void RefreshEffective() {
   const int ab = banjo::renut_gpu::g_ab_off.load(std::memory_order_relaxed);
   for (int i = 0; i < kCount; ++i) {
     const bool on = g_latched.on[i] && ab != kAbBase + i && !(ab == kAbRtGroup && i >= kRtRestoreCandidates);
-    g_effective[i].store(on ? 2 : 1, std::memory_order_relaxed);
+    g_effective[i] = on ? 2 : 1;
   }
 }
 
 void ApplyPlume() {
 #if defined(PLUME_DEKO3D)
+  plume::g_deko3dCounts = banjo::renut_gpu::Latch().counts;  // banjo-nx (2026-11-20): plume's stats bumps
   plume::g_deko3dOptions.preciseDepthResolve = On(kPreciseDepth);
   plume::g_deko3dOptions.decompressMerge = On(kDecompressMerge);
   plume::g_deko3dOptions.readbackMerge = On(kReadbackMerge);

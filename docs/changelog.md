@@ -353,3 +353,11 @@ Ports 1-43 are the first round: the universal fixes of the other ports' renderer
 - Port 239 (from banjo-nx): BANJO_SWITCH_RENUT_DEBUG_INFO (-g for the renderer and plume, the same code) and tools/profile_inline.py.
 - Port 240 (from banjo-nx): the NaN flush key read once a constant upload, not once a group.
 - Port 241 (from banjo-nx): an urgent shader compile (a fetch-specialised pipeline) takes no compile rest.
+- Port 242 (from banjo-nx): -fno-threadsafe-statics on the switches' files the draw path calls (ultimate.cpp, banjo_renut_tuning.cpp, render_thread.cpp); AbTargets under std::call_once.
+- Port 243 (from banjo-nx): the A/B word as a plain int for the draw path (g_ab_off_plain); Latch() tests a flag on its own line.
+- Port 244 (from banjo-nx): the 10 s report's per-draw counts off with log_level "off" or banjo_renut_draw_counts = false (the A/B's draw count kept).
+- Port 245 (from banjo-nx): the GPU round's On() answers as plain bytes.
+- Port 246 (from banjo-nx): FillTextures' skips: an unasked call's compare and copy, a slot answer's epoch buckets (A/B 170).
+- Port 247 (from banjo-nx): PrefetchShaderBehind skipped for a stage whose shader is the last op's (A/B 171).
+- Port 248 (from banjo-nx): TextureFetch::FromGuest in NEON.
+- Port 249 (from banjo-nx): banjo_renut_ring_spin_us, an experiment (0, off).

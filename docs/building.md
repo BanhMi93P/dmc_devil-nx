@@ -130,6 +130,8 @@ its form, so with the defaults these steps make and use `pgo-inplace/`; with `IN
    Ports 236-238 change the draw path's functions too: banjo-nx's N&B with the profile trained before them ran 13 %
    slower (17.7 fps against 20.8) and at 23.1 once trained again. Train in the scenes that matter: N&B's profile
    trained on the title and the intro left the city's paths cold (banjo-nx, 2026-11-20).
+   Ports 242-248 change them again (banjo-nx's lean batch, 2026-11-21): train again after taking them, before
+   judging them.
 
 Two more PGO options were tried and are not used (blur-nx, 2026-11-12, its CPU batch 3; port 111):
 
