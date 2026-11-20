@@ -55,6 +55,9 @@ The A/B, profile and test tomls turn these on to measure. The player's toml turn
 
 **Off by default. Keep them out of the player's toml, or false:**
 
+On the Switch, `blur_renut_diag_stage_census` and `blur_renut_diag_batch_census` are compiled out unless the build
+has `BANJO_SWITCH_DIAG_CENSUS` ON (port 236): their checks cost the render thread ~0.1 us a draw with the keys off.
+
 | Key | What it costs when on |
 |---|---|
 | `blur_renut_diag_stage_census` | Two clock reads and two atomics a stage (blur-nx: about 0.5-1 us of a 9.5 us draw) |

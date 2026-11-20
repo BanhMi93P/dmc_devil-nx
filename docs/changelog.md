@@ -347,3 +347,9 @@ Ports 1-43 are the first round: the universal fixes of the other ports' renderer
 - Port 234 (from banjo-nx): the shader compiler's share of its core counts every compile.
 - Port 234, its follow-up (from banjo-nx): a draw's shader compile never waits behind the compile rest.
 - Port 235 (from banjo-nx): profile_per_draw.py, ab_halves.py, deko3d_miss_coverage.py --nearest.
+- Port 236 (from banjo-nx): the renderer's diagnostic censuses compiled out of the Switch build (BANJO_SWITCH_DIAG_CENSUS, off).
+- Port 237 (from banjo-nx): the GPU round's On() is one byte load.
+- Port 238 (from banjo-nx): one copy each of FillTextures, PushFloatConstants and Replay; train PGO again after ports 236-238.
+- Port 239 (from banjo-nx): BANJO_SWITCH_RENUT_DEBUG_INFO (-g for the renderer and plume, the same code) and tools/profile_inline.py.
+- Port 240 (from banjo-nx): the NaN flush key read once a constant upload, not once a group.
+- Port 241 (from banjo-nx): an urgent shader compile (a fetch-specialised pipeline) takes no compile rest.

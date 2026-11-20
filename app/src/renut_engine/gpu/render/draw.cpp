@@ -3438,11 +3438,13 @@ UploadAllocation UploadFloatConstants(const FloatConstants &constants, const u32
   if (need > 256 * 16)
     std::memset(out + 256 * 16, 0, kFloatConstantsUboBytes - 256 * 16);
   // The upload memory is write-combined: written in order, never read.
+  // banjo-nx (2026-11-20): the key read once here, not a call (and its static's guard) for every group.
+  const bool nan_flush = banjo::renut_gpu::ConstNanFlushOn();
   for (uint64_t remaining = groups; remaining;) {
     const u32 group = u32(std::countl_zero(remaining));
     remaining &= ~(uint64_t(1) << (63 - group));
     CopyAndSwapGroup(constants.Register(group * 4), last.bytes + group * kConstantGroupBytes,
-                     out + group * kConstantGroupBytes, banjo::renut_gpu::ConstNanFlushOn());  // banjo-nx (2026-10-28)
+                     out + group * kConstantGroupBytes, nan_flush);  // banjo-nx (2026-10-28)
   }
   // Every register of those groups is in the upload, with the bytes it has
   // now.
@@ -3575,7 +3577,9 @@ inline void DiagPushLines(u32 first, u32 run) {
       ++g_diag_push_lines[l];
 }
 // One stage's float constants (see above); 'ubo' its buffer's address.
-void PushFloatConstants(plume::RenderCommandList *cmd, const FloatConstants &constants, const u32 used[8],
+// banjo-nx (2026-11-20, N&B's render thread against renut-nx 1.0.2 in Showdown Town): one copy (noclone): LTO's
+// constant propagation made two 6 KB copies of it, and both ran every draw (the instruction cache; 1.0.2 had one).
+[[gnu::noclone]] void PushFloatConstants(plume::RenderCommandList *cmd, const FloatConstants &constants, const u32 used[8],
                         ConstantUpload &last, const ShaderCacheEntry *entry, uint64_t ubo, const GroupSummary &summary) {
   ::renut::gpu::census::Scope census_scope(::renut::gpu::census::kPushConstants);  // blur-nx (2026-11-17)
   // banjo-nx (2026-10-27, constants): whether the shader has literals and the registers it reads from its summary (the
@@ -3660,12 +3664,13 @@ void PushFloatConstants(plume::RenderCommandList *cmd, const FloatConstants &con
     // count instead of a test a group.
     const u32 count = u32(std::countl_one(remaining << first));
     alignas(16) u32 lanes[64 * kConstantGroupBytes / 4];
+    const bool nan_flush = banjo::renut_gpu::ConstNanFlushOn();  // banjo-nx (2026-11-20): once, not a call a group
     for (u32 k = 0; k < count; ++k) {
       const u32 group = first + k;
       // banjo-nx (2026-10-27, render thread night): swapped on the way (a separate pass over the run before);
       // banjo-nx (2026-10-28): both copies from one NEON load (CopyAndSwapGroup).
       CopyAndSwapGroup(constants.Register(group * 4), last.bytes + group * kConstantGroupBytes,
-                       reinterpret_cast<u8 *>(lanes + k * (kConstantGroupBytes / 4)), banjo::renut_gpu::ConstNanFlushOn());
+                       reinterpret_cast<u8 *>(lanes + k * (kConstantGroupBytes / 4)), nan_flush);
       last.valid[group / 8] |= 0xFu << (group % 8 * 4);
       for (u32 q = 0; q < 4; ++q)
         last.lit_owner[group * 4 + q] = nullptr;  // banjo-nx (2026-10-27): the device's bytes now
@@ -4461,7 +4466,9 @@ const FetchFilterOverrides *DrawFetchFiltersLocked(const ShaderRecord *vs, const
   return &merged;
 }
 
-void FillTextures(const GuestDevice &device, u32 fetch_mask, SharedConstants &sc, BindEffects *slot_fx = nullptr,
+// banjo-nx (2026-11-20, N&B's render thread against renut-nx 1.0.2 in Showdown Town): one copy (noclone): LTO's
+// constant propagation made three 18-20 KB copies of it, and both ran every draw (the instruction cache; 1.0.2 had one).
+[[gnu::noclone]] void FillTextures(const GuestDevice &device, u32 fetch_mask, SharedConstants &sc, BindEffects *slot_fx = nullptr,
                   bool *all_memo = nullptr, const TextureFetch *draw_fetches = nullptr, bool *same_as_last = nullptr,
                   const FetchFilterOverrides *filters = nullptr) {
   ::renut::gpu::census::Scope census_scope(::renut::gpu::census::kFillTextures);  // blur-nx (2026-11-17)

@@ -180,6 +180,9 @@ so the base's default stays; a port that sees the same turns the key off in its 
 | `blur_small_alloc_mb` (32) | deadpool-nx: 0 (Unreal Engine 3's own allocator) | None given |
 | `spin_hint_yield` (codegen, on) | deadpool-nx: off "for UE3 spinlock efficiency" | None given |
 | `banjo_renut_keep_unused_targets` (on) | deadpool-nx (ea2dffc5): off | None given |
+| `banjo_renut_const_nan_flush`, `banjo_renut_vertex_finite` (on) | banjo-nx (17984e41, 2026-11-20; the user's): off for N&B, "off what N&B does not need and 1.0.2 did not have" | renut-nx 1.0.2 drew N&B right without either |
+| `banjo_renut_stream_redeem` (on) | banjo-nx (2026-11-20): off for N&B | 0-1 streams made cacheable again in 12 min of the game (render-thread-turn-offs.md's rule) |
+| `dishonored_renut_vertex_readable_check` (on) | banjo-nx (2b6ff1dc, 2026-11-20): off for N&B (the user's) | None given |
 
 deadpool-nx also turned on `blur_renut_edram_inherit` (off here, port 86), `audio_xma_output_done_when_drained` and
 `audio_xma_kick_wake_idle_only` (off here) for Deadpool.

@@ -127,6 +127,9 @@ its form, so with the defaults these steps make and use `pgo-inplace/`; with `IN
    profile. So train again after a change to the draw path's own functions: port 179 added calls inside
    FastDrawLocked and DrawStateLocked, and Blur's NRO with the profile trained before it drew at 14.75 us a draw
    (render thread) until it was trained again (11.56 us; blur-nx, 2026-11-18).
+   Ports 236-238 change the draw path's functions too: banjo-nx's N&B with the profile trained before them ran 13 %
+   slower (17.7 fps against 20.8) and at 23.1 once trained again. Train in the scenes that matter: N&B's profile
+   trained on the title and the intro left the city's paths cold (banjo-nx, 2026-11-20).
 
 Two more PGO options were tried and are not used (blur-nx, 2026-11-12, its CPU batch 3; port 111):
 
@@ -201,6 +204,12 @@ then its `test/release_node.mjs` (its README). `wasm/renut_hlsl` must be rebuilt
   first races compile them (sasrt-nx: 95 compiles, +8 ms of process CPU in that race, gone after two races).
   Over the network, `tools/switch_remote.py` (sys-botbase and sys-ftpd-light; only the port's own folder on the SD
   card, nothing deleted): [porting-a-360-game-prompt.md](porting-a-360-game-prompt.md), appendix A.
+- **The renderer's censuses and inlined profiles on the console:** the Switch build compiles out
+  `blur_renut_diag_stage_census` and `blur_renut_diag_batch_census` (`BANJO_SWITCH_DIAG_CENSUS` OFF, port 236): a
+  census run builds a folder of its own with `CMAKE_EXTRA=-DBANJO_SWITCH_DIAG_CENSUS=ON`. To name a console
+  profile's samples by source function, inlined ones included, build with `-DBANJO_SWITCH_RENUT_DEBUG_INFO=ON` (port
+  239; the same code, so its ELF also names a normal NRO's samples) and run `python tools/profile_inline.py PROFILE
+  ELF RENUT_LOG [PROFILE ELF RENUT_LOG]` (two builds side by side, per draw).
 - **Picture bugs:** a RenderDoc capture first, of the PC build or of Ryujinx (`tools/run_ryujinx_rdc.ps1`, then the
   `tools/rdc_*.py` scripts through `tools/rdc_run.ps1`; `RENDERDOC_DIR` names the RenderDoc folder): the porting
   guide's appendix B.
