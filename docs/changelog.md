@@ -361,3 +361,5 @@ Ports 1-43 are the first round: the universal fixes of the other ports' renderer
 - Port 247 (from banjo-nx): PrefetchShaderBehind skipped for a stage whose shader is the last op's (A/B 171).
 - Port 248 (from banjo-nx): TextureFetch::FromGuest in NEON.
 - Port 249 (from banjo-nx): banjo_renut_ring_spin_us, an experiment (0, off).
+- Port 250 turns port 161's banjo_deko3d_copy_run_barriers off by default: on Blur's console it drew races with
+  ghosting, colour fringes and grain (the ghosting port 181 blamed on the texture park).

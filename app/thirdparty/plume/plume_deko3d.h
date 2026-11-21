@@ -638,6 +638,11 @@ namespace plume {
         // (copyRunFenced: nothing but buffer copies since it), a barrier recorded before another buffer copy stays
         // pending, as a Full, and is emitted before the next command the copy engine does not run: every other
         // command calls flushBarriers. Without a Full first nothing is held back.
+        // Port 250 (2026-11-21, blur-nx's console bisect): off by default. With it on, Blur's races drew ghosting,
+        // colour fringes and grain (4 of 4 races; off, clean in 3 of 3), reliably with the NRO's own GLSL package and
+        // an empty DKSH cache (the shader compiles' timing, not the shaders). So the ordering above does not hold
+        // somewhere; why is not known (blur-nx's guess: copies that depend on one another, or on GPU writes since the
+        // last Full barrier, are not ordered without the barrier).
         bool copyRunFenced = false;
         uint32_t sampleMaskSet = 0xFFFFFFFFu;  // port 166: the mask last recorded (none yet in this list)
         void flushBarriers() {
