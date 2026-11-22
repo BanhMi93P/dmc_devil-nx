@@ -371,3 +371,5 @@ Ports 1-43 are the first round: the universal fixes of the other ports' renderer
   (926, 950-973 and 977 stay in it), which the prebuild otherwise compiled blocking: RR6's 10 % GPU gap after the sync.
 - Port 254: the uam compile thread on core 2 by default (banjo_system_core_uam off); port 251's stage and warm helper
   keep core 3, where a race compile took minutes under them.
+- Port 255: dynamic resolution with a switch for each mode (handheld off, docked on at 972-1080 by default),
+  the game menu's fixed and dynamic resolution rows for each.

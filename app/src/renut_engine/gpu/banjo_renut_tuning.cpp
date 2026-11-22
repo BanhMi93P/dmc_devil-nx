@@ -1601,13 +1601,16 @@ void StatsGameFrame() {
     const uint64_t depth = g_ui_depth[0].exchange(0, std::memory_order_relaxed);
     const uint64_t kept = g_ui_depth[1].exchange(0, std::memory_order_relaxed);
     // banjo-nx (2026-10-28): with dynamic resolution on, its ranges (the fixed-height keys are not used then).
-    const std::string heights =
-        ::renut::gpu::DynamicResolutionOn()
-            ? fmt::format("dynamic: handheld {}-{}, docked {}-{}, {} steps between", ::renut::gpu::DynamicHeight(false, false),
-                          ::renut::gpu::DynamicHeight(false, true), ::renut::gpu::DynamicHeight(true, false),
-                          ::renut::gpu::DynamicHeight(true, true), ::renut::gpu::DynamicSteps())
-            : fmt::format("banjo_renut_render_height_handheld {}, _docked {}", RenderHeightHandheld(),
-                          RenderHeightDocked());
+    // rr6-nx (2026-11-22): each mode's own (banjo_renut_dynamic_resolution_handheld / _docked).
+    const auto mode_heights = [](bool docked) {
+      return ::renut::gpu::DynamicModeOn(docked)
+                 ? fmt::format("{} dynamic {}-{}", docked ? "docked" : "handheld",
+                               ::renut::gpu::DynamicHeight(docked, false), ::renut::gpu::DynamicHeight(docked, true))
+                 : fmt::format("{} fixed {}", docked ? "docked" : "handheld",
+                               docked ? RenderHeightDocked() : RenderHeightHandheld());
+    };
+    const std::string heights = mode_heights(false) + ", " + mode_heights(true) +
+                                fmt::format(", {} steps between", ::renut::gpu::DynamicSteps());
     if (scaled || RenderHeightHandheld() != 720 || RenderHeightDocked() != 720)
       REXLOG_INFO("[renut] internal resolution ({}, display docked {}, "
                   "{} upscale, not exact): {} composites scaled up for the HUD, {} drawn at the display's resolution, "
