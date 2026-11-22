@@ -1235,6 +1235,10 @@ namespace plume {
         // The uam thread's core (-1: any) and priority (Horizon: a higher number is a lower priority; 0: unchanged).
         // A thread that waits for a compile lends its priority to the uam thread while it waits.
         int compileCore = -1;
+        // sasrt-nx (2026-11-22, the user: "let the shader compiles float around instead"): when set, the uam thread and its
+        // spare-chunk thread are placed by this (the app's: every core of the process, no preferred core: the kernel
+        // puts them where there is room) instead of being pinned to compileCore.
+        void (*placeCompileThread)() = nullptr;
         int compilePriority = 0;
         // banjo-nx (2026-10-23): the share of its core (percent) background compiles may use: after each one the uam
         // thread rests in proportion (a compile a thread waits for ends the rest). An application's lowest priority

@@ -169,6 +169,14 @@ base's translator and passes, and packs the archives `game.json` names as `.lz4b
 `wasm/uam` are built from this tree: rebuild them after a change to the translator, its front end or uam, and run its
 `tools/sync_from_base.py` after a change to the Python passes. Its README has the steps; Katamari is its example.
 
+The SDK reads the smaller game files the ports' installers make (port 259): `NAME.lz4b`, version 1 (LZ4) or 2 (ZXC
+blocks; `tools/zxcb_pack.cpp` makes one on the PC, `tools/test_lz4_blocks.cpp` checks either), and the re-encodes that
+answer for NAME: `NAME.hevc` (a Sofdec movie's pictures as H.265, `sdk/include/rex/filesystem/sfd_hevc.h`), `NAME.opcm`
+(raw PCM as Opus, `opus_pcm.h`), `NAME.xmo` / `NAME.xmop` (an XMA file or package whose frames are Opus, `xmo.h`). The
+formats are in those headers. The movies need the game's own player hooks and `tools/switch/nxvideo`, built as the static
+library `renut_nxvideo` when devkitPro's FFmpeg has nvtegra; the Opus sounds need libopus (devkitPro's `switch-libopus`
+on the Switch, the system's on a PC).
+
 The older page, [katamari-nx-installer](https://github.com/ChanseyIsTheBest/katamari-nx-installer) makes the same `deko3d_glsl.bin` in the
 browser. For a new release:
 

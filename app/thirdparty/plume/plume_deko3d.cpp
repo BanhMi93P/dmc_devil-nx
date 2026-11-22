@@ -1636,7 +1636,9 @@ namespace plume {
     void Deko3DDevice::spareWorker() {
         // The uam thread's place: off the render thread's core, below the game's threads (the priority the process
         // allows at or above the asked one, as compileWorker takes it).
-        if (g_deko3dOptions.compileCore >= 0)
+        if (g_deko3dOptions.placeCompileThread)  // sasrt-nx (2026-11-22): the compiles float (see the option)
+            g_deko3dOptions.placeCompileThread();
+        else if (g_deko3dOptions.compileCore >= 0)
             svcSetThreadCoreMask(CUR_THREAD_HANDLE, g_deko3dOptions.compileCore, 1u << g_deko3dOptions.compileCore);
         s32 asked = g_deko3dOptions.compilePriority, priority = -1;
         if (asked > 0) {
@@ -2099,7 +2101,9 @@ namespace plume {
             std::lock_guard<std::mutex> lock(compileMutex);  // compile() reads it under the lock
             compileThreadHandle = threadGetCurHandle();
         }
-        if (g_deko3dOptions.compileCore >= 0)
+        if (g_deko3dOptions.placeCompileThread)  // sasrt-nx (2026-11-22): the compiles float (see the option)
+            g_deko3dOptions.placeCompileThread();
+        else if (g_deko3dOptions.compileCore >= 0)
             svcSetThreadCoreMask(CUR_THREAD_HANDLE, g_deko3dOptions.compileCore, 1u << g_deko3dOptions.compileCore);
         // banjo-nx (2026-10-23): the priority the process may give (the console's profile showed this thread at 0x3B in
         // every report: 0x3E is below an application's lowest, the game threads' 0x3B, and the kernel refused it while

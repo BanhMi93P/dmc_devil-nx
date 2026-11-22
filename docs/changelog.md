@@ -373,3 +373,13 @@ Ports 1-43 are the first round: the universal fixes of the other ports' renderer
   keep core 3, where a race compile took minutes under them.
 - Port 255: dynamic resolution with a switch for each mode (handheld off, docked on at 972-1080 by default),
   the game menu's fixed and dynamic resolution rows for each.
+- Port 256 (from sasrt-nx): sasrt_compile_threads_core (2): every shader compile thread on core 2 (-1 floating, -2 the
+  old keys).
+- Port 257 (from sasrt-nx): sasrt_resolve_remake_carry: a resolve destination remade at a dynamic resolution step keeps
+  its content; sasrt_resolve_alias_previous, off.
+- Port 258 (from sasrt-nx): weak stand-ins for the FPS overlay's counter and RenderDoc's game frame tick, so ports
+  without those files build display_sync.cpp and frame_stats.cpp.
+- Port 259 (from sasrt-nx, rr6-nx, culdcept-nx): the smaller game files in the SDK: .lz4b version 2 (ZXC), NAME.hevc
+  (H.265 movies), NAME.opcm (PCM as Opus), NAME.xmo / NAME.xmop (XMA as Opus), the merged lookup, libopus (rexopus) and
+  tools/switch/nxvideo as the static library renut_nxvideo.
+- Port 260 (from sasrt-nx): its render-thread rounds 2-4's 13 universal items (A/B 190-203, groups 241-243), on.
