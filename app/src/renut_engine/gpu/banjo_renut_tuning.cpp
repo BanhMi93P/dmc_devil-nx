@@ -1,4 +1,5 @@
 // banjo-nx (2026-10-17): see banjo_renut_tuning.h.
+#include "banjo_switch_default.h"  // banjo-nx (port 251): BANJO_SWITCH_DEFAULT
 #include "renut_engine/gpu/backend/render_thread.h"
 #include "renut_engine/gpu/backend/video.h"
 #include <rex/frame_latency.h>
@@ -77,12 +78,16 @@ REXCVAR_DEFINE_BOOL(banjo_system_core_compiles, false, "Banjo/Threads",
 // banjo-nx (2026-10-28, the user's request): the uam thread alone on the system core, with the background compiles held
 // to banjo_deko3d_background_compile_share (10 %) by their rests. The pipeline prebuild workers (bursts at area loads,
 // banjo_system_core_compiles) stay off it.
-REXCVAR_DEFINE_BOOL(banjo_system_core_uam, true, "Banjo/Threads",
+// Port 254 (2026-11-22, the user to rr6-nx: "Compile on core 2"): off by default. Port 251's command stage (0x2E) and
+// warm helper (0x2F) keep the system core busy in play, above this thread (0x3B): in RR6 races a compile there took
+// 250-354 s and the prebuild waiting on it held every specialised pipeline back (GPU +1.2 ms); on core 2, 169 ms.
+REXCVAR_DEFINE_BOOL(banjo_system_core_uam, false, "Banjo/Threads",
                     "When the process has the system core (four cores granted, banjo_system_core 1 or 2): the uam "
                     "shader compile thread runs there (at the lowest priority an application gets, so the audio "
                     "threads there go first; its background compiles rest to banjo_deko3d_background_compile_share of "
                     "the core) instead of on banjo_background_compile_core, the game's core 2. The pipeline prebuild "
-                    "workers stay where banjo_system_core_compiles puts them. No effect with the usual three cores")
+                    "workers stay where banjo_system_core_compiles puts them. Off by default (port 254: port 251's "
+                    "command stage and warm helper keep that core busy). No effect with the usual three cores")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 REXCVAR_DECLARE(int32_t, banjo_prewarm_threads);
 // banjo-nx's renderer's NVK keys (masseffect_native_draws.cpp), applied to Renut's renderer too (ControlNvkLocked).
@@ -464,7 +469,9 @@ REXCVAR_DEFINE_BOOL(banjo_async_present, true, "Banjo/Enhancements",
                     "one: 2.7 ms a frame in tw2de_nx's heaviest stretch) are made by a helper thread, so the renderer's "
                     "feed thread records the next frame instead of waiting for the compositor's answers. The same calls "
                     "in the same order. false: on the presenting thread, as before");
-REXCVAR_DEFINE_BOOL(banjo_deko3d_kick_submit, true, "Banjo/Enhancements",
+// banjo-nx (2026-11-21): off on the Switch (the user, after console c41: with it the render thread +1.7 % a draw, the GPU
+// +1.65 % a draw, -2.3 % fps in Showdown Town; what it buys is input latency).
+REXCVAR_DEFINE_BOOL(banjo_deko3d_kick_submit, BANJO_SWITCH_DEFAULT(false, true), "Banjo/Enhancements",
                     "deko3d renderer (2026-10-19, input latency): at the game's kicks (several a frame) the command "
                     "list recorded so far is ended and handed to the GPU at the next kick, instead of the whole frame "
                     "at the present: the GPU starts a frame's work while the render thread still records the rest, so "
@@ -1139,6 +1146,23 @@ const char *AbName(int target) {
   // kAbBase + item, so 90's off half also switched sasrt_gpu_skip_inert_draws off).
   case 150: return "the shader round's GLSL passes in the pixel shaders, constant 975 (vivapinata_shader_round; off half: 975 = 0, the code as before them)";
   // vivapinata-nx (2026-11-12, port 115; its number).
+  case 173: return "command memory CPU-cached, cleaned at each list's end (banjo_deko3d_cached_commands; banjo-nx 2026-11-21)";
+  case 174: return "Replay: PrefetchShaderBehind at shader changes (prefetches only; banjo-nx 2026-11-21)";
+  case 175: return "Replay: ApplyResources prefetches the geometry objects' copies and cards, not only their answers (banjo-nx 2026-11-21)";
+  case 176: return "Replay: the next op's shader memo sets prefetched (PrefetchShaderLocked; banjo-nx 2026-11-21; off half: none)";
+  case 177: return "fast path: the shader change's prefetches (device lines, declaration, literal runs, entries; banjo-nx 2026-11-21)";
+  case 178: return "fast path: the texture slots' and the pipeline entry's prefetches (banjo-nx 2026-11-21; off half: none)";
+  case 179: return "kick submits (banjo_deko3d_kick_submit): lists ended at the game's kicks (banjo-nx 2026-11-21; off half: the frame at the present)";
+  case 181: return "Replay: the next draw's store cards prefetched from its record's header words (banjo-nx 2026-11-21; off half: none)";
+  case 182: return "the deko3d command stage (banjo_deko3d_command_stage): lists recorded into a stream played on the system core (banjo-nx 2026-11-21; off half: recorded directly)";
+  case 183: return "the command stage ends, submits and presents the frame (banjo_deko3d_stage_submit; banjo-nx 2026-11-21; off half: the render thread drains and submits)";
+  case 184: return "float constants into the stage's stream as the guest has them, swapped by the stage (banjo_deko3d_stage_swap; banjo-nx 2026-11-21)";
+  case 185: return "the cache-warming helper on the system core (banjo_renut_warm_helper; banjo-nx 2026-11-21; off half: given nothing)";
+  case 186: return "the command stage looks for work every poll_us, never woken by the render thread (banjo-nx 2026-11-21; off half: woken)";
+  case 189: return "the command stage and the warm helper float on cores 1-3 (banjo_deko3d_command_stage_float; banjo-nx 2026-11-22; off half: core 3 alone)";
+  case 188: return "the command stage prefetches its stream's lines ahead (banjo_deko3d_command_stage_stream_ahead; banjo-nx 2026-11-21)";
+  case 187: return "the command stage prefetches the objects of the commands ahead (banjo_deko3d_command_stage_peek; banjo-nx 2026-11-21)";
+  case 172: return "the fast path's spec answers (fetch spec, plain fetches, clip bit, sasrt words) kept while their inputs hold (banjo-nx 2026-11-21)";
   case 156: return "depth resolves nothing has read left out until something does (vivapinata_depth_resolve_skip_unread; NOT exact in principle; off half: drawn)";
   case 152: return "the pixel shaders' alpha test moved up ahead of the colour arithmetic, constant 977 = 1 (vivapinata_shader_earlykill; off half: the test last)";
   case 151: return "the pixel shaders without Renut's early alpha test, constant 976 = 0 (vivapinata_shader_noearly; off half: the test as before)";

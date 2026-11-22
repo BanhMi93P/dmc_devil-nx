@@ -38,7 +38,8 @@ REXCVAR_DEFINE_BOOL(banjo_deko3d_log_writer, true, "Banjo/Enhancements",
                     "line written and flushed where it is said, as before")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 // Port 161 (from fnxf_xiii, its note of 2026-10-30): plume_deko3d.h beforeBufferCopy. Off by default since port 250
-// (2026-11-21, blur-nx's console bisect: with it on, Blur's races ghosted; docs/off-by-default.md section 1).
+// (2026-11-21, blur-nx's console bisect: with it on, Blur's races drew rainbow colour fringes, its release NRO too;
+// docs/off-by-default.md section 1).
 // banjo-nx (2026-11-20, the rebase's console runs: 20,000 stages on the generic variant): plume's logMisses.
 REXCVAR_DEFINE_BOOL(banjo_deko3d_log_misses, false, "Banjo/Diagnostics",
                     "deko3d renderer: every shader variant a draw got the generic one for (neither loaded nor in "
@@ -48,7 +49,7 @@ REXCVAR_DEFINE_BOOL(banjo_deko3d_log_misses, false, "Banjo/Diagnostics",
 REXCVAR_DEFINE_BOOL(banjo_deko3d_copy_run_barriers, false, "Banjo/Enhancements",
                     "deko3d: no barrier between back-to-back buffer copies once a full one has run (the copy engine "
                     "was taken to run them one at a time; each full barrier is 2 GPU submission entries). Off by "
-                    "default: with it on, Blur's console races drew ghosting, colour fringes and grain (port 250). "
+                    "default: with it on, Blur's console races drew rainbow colour fringes (port 250). "
                     "false: a barrier before every copy, as before port 161")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 REXCVAR_DEFINE_BOOL(sasrt_deko3d_diag_trace, false, "SASRT/Diagnostics",

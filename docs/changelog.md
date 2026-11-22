@@ -361,5 +361,13 @@ Ports 1-43 are the first round: the universal fixes of the other ports' renderer
 - Port 247 (from banjo-nx): PrefetchShaderBehind skipped for a stage whose shader is the last op's (A/B 171).
 - Port 248 (from banjo-nx): TextureFetch::FromGuest in NEON.
 - Port 249 (from banjo-nx): banjo_renut_ring_spin_us, an experiment (0, off).
-- Port 250 turns port 161's banjo_deko3d_copy_run_barriers off by default: on Blur's console it drew races with
-  ghosting, colour fringes and grain (the ghosting port 181 blamed on the texture park).
+- Port 250 turns port 161's banjo_deko3d_copy_run_barriers off by default: on Blur's console it drew rainbow colour
+  fringes in races, its release NRO too (the ghosting port 181 blamed on the texture park).
+- Port 251 (from banjo-nx): the deko3d command stage on the system core (4-core mode; the render thread records, a
+  thread on core 3 plays into deko3d), the cache-warming helper and render-thread cycles 1-4: in N&B on the console the
+  render thread -14.9 % a draw, fps +6.4 %. Kick submits off and the SMAA hand-over on, on the Switch.
+- Port 252: four cores for Katamari again (its forwarder 0100080021954000 in its tomls), so port 251's stage has core 3.
+- Port 253 (from rr6-nx): tools/deko3d_variant_cache.py --generic also writes each pipeline's own generic variant
+  (926, 950-973 and 977 stay in it), which the prebuild otherwise compiled blocking: RR6's 10 % GPU gap after the sync.
+- Port 254: the uam compile thread on core 2 by default (banjo_system_core_uam off); port 251's stage and warm helper
+  keep core 3, where a race compile took minutes under them.
