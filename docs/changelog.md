@@ -383,3 +383,5 @@ Ports 1-43 are the first round: the universal fixes of the other ports' renderer
   (H.265 movies), NAME.opcm (PCM as Opus), NAME.xmo / NAME.xmop (XMA as Opus), the merged lookup, libopus (rexopus) and
   tools/switch/nxvideo as the static library renut_nxvideo.
 - Port 260 (from sasrt-nx): its render-thread rounds 2-4's 13 universal items (A/B 190-203, groups 241-243), on.
+- Port 261 (from sasrt-nx): sasrt_resolve_alias_previous (off) no longer takes a read of the latest depth resolve's
+  words (stripes through SASRT's far scenery below 1x).
