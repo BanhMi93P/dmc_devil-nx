@@ -387,3 +387,4 @@ Ports 1-43 are the first round: the universal fixes of the other ports' renderer
   words (stripes through SASRT's far scenery below 1x).
 - Port 262 (from the Cave ports): the handheld GPU boost (RexSwitchApmApply) changes nothing when the clocks read 0
   (Ryujinx: the SDK overlays drawn after it stayed invisible).
+- Port 263: sasrt_gpu_seed_cpu_direct off by default (banjo-nx's vertex explosions with it on).
