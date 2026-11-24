@@ -869,6 +869,18 @@ int RexSwitchApplyNamedPriority(unsigned handle, const char* name) {
 
 unsigned RexSwitchNamedPrioritiesApplied(void) { return g_named_applied.load(std::memory_order_relaxed); }
 
+void RexSwitchSanitizeThreadTls(void) {
+  uint8_t* tls = static_cast<uint8_t*>(armGetTls());
+  if (tls) {
+    // libnx TLS slots are at offset 0x108 (27 slots = 0xd8 bytes, ending at 0x1e0 magic).
+    std::memset(tls + 0x108, 0, 0xd8);
+  }
+  Thread* self = threadGetSelf();
+  if (self) {
+    self->tls_array = tls ? reinterpret_cast<void**>(tls + 0x108) : nullptr;
+  }
+}
+
 }  // extern "C"
 
 #endif  /* REX_PLATFORM_SWITCH */

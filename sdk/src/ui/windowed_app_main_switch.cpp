@@ -64,7 +64,10 @@ namespace {
 
 }  // namespace
 
+extern "C" void RexSwitchSanitizeThreadTls(void);
+
 int main(int argc, char* argv[]) {
+  RexSwitchSanitizeThreadTls();
   auto remaining = rex::cvar::Init(argc, argv);
   rex::cvar::ApplyEnvironment();
   rex::InitLoggingEarly();
