@@ -396,3 +396,5 @@ Ports 1-43 are the first round: the universal fixes of the other ports' renderer
 - Port 267 (Katamari): the movies by FFmpeg's WMV3 decoder, or by NVDEC once the installer re-encoded them to H.265.
 - Port 268: predicated tiling: a draw predicated to one tile keeps its screen viewport (Katamari's collection
   screen, columns 2 and 4).
+- Port 269 (the Peggle 2 session's finding): the app's dialogs are released in OnShutdown, before the SDK frees
+  their drawer (a normal quit faulted in ~GameMenuDialog).
