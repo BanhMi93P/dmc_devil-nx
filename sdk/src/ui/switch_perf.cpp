@@ -78,6 +78,7 @@ int RexGmProtectionMode(void);
 Result __real_threadCreate(Thread* t, ThreadFunc entry, void* arg, void* stack_mem,
                            size_t stack_sz, int prio, int cpuid);
 Result __real_threadClose(Thread* t);
+void __real_threadExit(void) __attribute__((noreturn));
 Result __real_nvFenceWait(NvFence* f, s32 timeout_us);
 Result __real_nvGpuChannelKickoff(NvGpuChannel* c);
 Result __real_nvMapCreate(NvMap* m, void* cpu_addr, u32 size, u32 align, NvKind kind, bool is_cpu_cacheable);
@@ -1108,6 +1109,7 @@ FpcrCost MeasureFpcrCost(u64 tick_freq) {
 }
 
 void ProfilerMain(void*) {
+  RexSwitchSanitizeThreadTls();
   const u64 tick_freq = armGetSystemTickFreq();
 
   /*
@@ -1349,6 +1351,12 @@ int __wrap__ZSt19uncaught_exceptionsv(void) { return static_cast<int>(s_rex_eh_g
 void RexSwitchAppThreadCreated(u32 handle) __attribute__((weak));
 void RexSwitchAppThreadNamed(u32 handle, const char* name) __attribute__((weak));
 void RexSwitchAppThreadClosed(u32 handle) __attribute__((weak));
+
+void __wrap_threadExit(void) __attribute__((noreturn));
+void __wrap_threadExit(void) {
+  RexSwitchSanitizeThreadTls();
+  __real_threadExit();
+}
 
 Result __wrap_threadCreate(Thread* t, ThreadFunc entry, void* arg, void* stack_mem,
                            size_t stack_sz, int prio, int cpuid) {

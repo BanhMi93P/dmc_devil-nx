@@ -881,6 +881,17 @@ void RexSwitchSanitizeThreadTls(void) {
   }
 }
 
+void RexSwitchThreadExit(void) {
+  RexSwitchSanitizeThreadTls();
+  Thread* self = threadGetSelf();
+  if (self) {
+    threadExit();
+  } else {
+    svcExitThread();
+  }
+  __builtin_unreachable();
+}
+
 }  // extern "C"
 
 #endif  /* REX_PLATFORM_SWITCH */

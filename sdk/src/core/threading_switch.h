@@ -263,6 +263,19 @@ int RexSwitchApplyNamedPriority(unsigned handle, const char* name);
 /* How many threads switch_thread_priorities has set (for the log). */
 unsigned RexSwitchNamedPrioritiesApplied(void);
 
+/*
+ * Sanitizes the calling thread's TLS array by zeroing slot entries before threadExit().
+ * On Switch, libnx's threadExit() executes destructors registered via pthread_key_create.
+ * For worker/guest threads, these can invoke invalid or partially torn-down C++ destructors.
+ */
+void RexSwitchSanitizeThreadTls(void);
+
+/*
+ * Safely terminates the calling thread on Switch without invoking broken TLS destructors.
+ * Properly unlinks from libnx's thread list and invokes svcExitThread().
+ */
+void RexSwitchThreadExit(void) __attribute__((noreturn));
+
 #ifdef __cplusplus
 }
 #endif

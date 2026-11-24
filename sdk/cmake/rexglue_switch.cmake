@@ -96,7 +96,7 @@ if(NOT TARGET rexglue_switch_startup)
     # banjo-nx (2026-10-27): svcSetThreadCoreMask, to keep the game threads off the system core when the process
     # is granted four cores (threading_switch.cpp, banjo_system_core).
     target_link_options(rexglue_switch_startup INTERFACE
-        "LINKER:--wrap=threadCreate,--wrap=threadClose"
+        "LINKER:--wrap=threadCreate,--wrap=threadClose,--wrap=threadExit"
         "LINKER:--wrap=nvFenceWait,--wrap=nvGpuChannelKickoff,--wrap=nvMapCreate"
         "LINKER:--wrap=nvAddressSpaceAllocFixed,--wrap=nvioctlNvhostAsGpu_MapBufferEx"
         "LINKER:--wrap=armDCacheClean,--wrap=nwindowQueueBuffer,--wrap=bqDequeueBuffer"
