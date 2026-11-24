@@ -60,6 +60,11 @@ REXCVAR_DECLARE(bool, banjo_gpu_zcull_greater);
 extern "C" {
 void RexSwitchApmRequestGpuMhz(int mhz);  // sdk/src/ui/switch_apm.cpp
 void RexSwitchApmApply(void);
+void RexSwitchRegisterStaticModule(const char* name, void* reg_fn, void* info_fn);
+#if defined(RENUT_STATIC_NTJOBCODE)
+void ReXModule_NTJobCode_Register(void*);
+const void* ReXModule_NTJobCode_GetImageInfo();
+#endif
 }
 #endif
 
@@ -150,6 +155,11 @@ public:
     // when config.graphics is empty).
     void OnPreSetup(rex::RuntimeConfig& config) override {
         banjo::ApplyMasterSwitches();
+#if REX_PLATFORM_SWITCH && defined(RENUT_STATIC_NTJOBCODE)
+        RexSwitchRegisterStaticModule("renut_NTJobCode",
+                                      reinterpret_cast<void*>(&ReXModule_NTJobCode_Register),
+                                      reinterpret_cast<void*>(&ReXModule_NTJobCode_GetImageInfo));
+#endif
 #if REX_PLATFORM_SWITCH
         // Before the Vulkan device exists (the graphics system creates it after this). Mesa's own disk cache
         // (fossilize file on the SD card) duplicates the renderer's pipeline cache file, and on the console its
@@ -290,17 +300,31 @@ public:
     // A game_root folder next to the executable is used when no path was given.
     // On the Switch that is sdmc:/switch/katamari-nx/game_root (the extracted disc).
     void OnConfigurePaths(rex::PathConfig& paths) override {
+        const auto folder = rex::filesystem::GetExecutableFolder();
+        std::error_code ec;
 #if defined(KATAMARI_BUILTIN_CONFIG)
         // The player's settings file. Not renut.toml: the test builds' full one, left on an SD card, would override
         // every built-in setting.
-        paths.config_path = rex::filesystem::GetExecutableFolder() / "dmc_devil.toml";
+        if (!folder.empty()) {
+            paths.config_path = folder / "dmc_devil.toml";
+        }
 #endif
-        if (paths.game_data_root.empty()) {
-            const auto folder = rex::filesystem::GetExecutableFolder();
-            std::error_code ec;
-            const auto extracted = folder / "game_root";
-            if (!folder.empty() && std::filesystem::is_directory(extracted, ec)) {
-                paths.game_data_root = extracted;
+        if (paths.game_data_root.empty() && !folder.empty()) {
+            for (const char* dir : {"game", "game_root"}) {
+                const auto candidate = folder / dir;
+                if (std::filesystem::is_directory(candidate, ec)) {
+                    paths.game_data_root = candidate;
+                    break;
+                }
+            }
+        }
+        if (paths.update_data_root.empty() && !folder.empty()) {
+            for (const char* dir : {"Update", "update"}) {
+                const auto candidate = folder / dir;
+                if (std::filesystem::is_directory(candidate, ec) && !std::filesystem::is_empty(candidate, ec)) {
+                    paths.update_data_root = candidate;
+                    break;
+                }
             }
         }
         renut::dlc::SetUserDataRoot(paths.user_data_root);  // the folder the DLC installer checks for installed ones

@@ -10,6 +10,7 @@
 # REXGLUE_SWITCH_NVK_SDK pointing at the Mesa Horizon SDK.
 #==========================================================
 include_guard(GLOBAL)
+set(_REXGLUE_SWITCH_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "rexglue switch cmake dir")
 
 set(REXGLUE_SWITCH_NVK_SDK "" CACHE PATH
     "portlibs/switch directory of the Mesa Horizon SDK (static NVK driver)")
@@ -170,12 +171,29 @@ function(rexglue_switch_add_nro target_name)
     find_program(REXGLUE_NACPTOOL nacptool HINTS "${DEVKITPRO}/tools/bin" NO_DEFAULT_PATH REQUIRED)
     find_program(REXGLUE_ELF2NRO elf2nro HINTS "${DEVKITPRO}/tools/bin" NO_DEFAULT_PATH REQUIRED)
 
+    set(_dir "$<TARGET_FILE_DIR:${target_name}>")
+    # Write NACP strings in UTF-8 at configure time; Windows nacptool.exe receives ANSI argv and corrupts non-ASCII UTF-8.
+    set(_nacp_meta "${CMAKE_CURRENT_BINARY_DIR}/${target_name}_nacp_meta.txt")
+    file(WRITE "${_nacp_meta}" "${ARG_NAME}\n${ARG_AUTHOR}\n${ARG_VERSION}\n")
+    set(_nacp_patch_cmd)
+    set(_nacp_py "${Python3_EXECUTABLE}")
+    if(NOT _nacp_py)
+        set(_nacp_py "${PYTHON_EXECUTABLE}")
+    endif()
+    if(NOT _nacp_py)
+        find_package(Python3 COMPONENTS Interpreter QUIET)
+        set(_nacp_py "${Python3_EXECUTABLE}")
+    endif()
+    if(_nacp_py)
+        set(_nacp_patch_cmd COMMAND "${_nacp_py}" "${_REXGLUE_SWITCH_CMAKE_DIR}/patch_nacp_utf8.py" "${_dir}/${target_name}.nacp" "${_nacp_meta}")
+    endif()
+
     # Changing the icon must re-run packaging even when executable sources are unchanged.
     set_property(TARGET ${target_name} APPEND PROPERTY LINK_DEPENDS "${ARG_ICON}")
-    set(_dir "$<TARGET_FILE_DIR:${target_name}>")
     add_custom_command(TARGET ${target_name} POST_BUILD
         COMMAND "${REXGLUE_NACPTOOL}" --create "${ARG_NAME}" "${ARG_AUTHOR}" "${ARG_VERSION}"
             "${_dir}/${target_name}.nacp"
+        ${_nacp_patch_cmd}
         COMMAND "${CMAKE_COMMAND}" -E copy "$<TARGET_FILE:${target_name}>"
             "${_dir}/${target_name}.stripped.elf"
         COMMAND "${CMAKE_STRIP}" --strip-all "${_dir}/${target_name}.stripped.elf"

@@ -18,7 +18,36 @@
 #include <rex/platform.h>
 #include <rex/platform/dynlib.h>
 
+#include <cstring>
+#include <string>
+#include <vector>
+
 static_assert(REX_PLATFORM_SWITCH, "This file is Nintendo Switch-only");
+
+namespace {
+struct StaticModuleEntry {
+  std::string name;
+  void* reg_fn;
+  void* info_fn;
+};
+
+std::vector<StaticModuleEntry>& StaticModules() {
+  static std::vector<StaticModuleEntry> modules;
+  return modules;
+}
+}  // namespace
+
+extern "C" void RexSwitchRegisterStaticModule(const char* name, void* reg_fn, void* info_fn) {
+  if (!name) return;
+  for (auto& m : StaticModules()) {
+    if (m.name == name) {
+      m.reg_fn = reg_fn;
+      m.info_fn = info_fn;
+      return;
+    }
+  }
+  StaticModules().push_back({name, reg_fn, info_fn});
+}
 
 namespace rex::platform {
 
@@ -40,9 +69,15 @@ DynamicLibrary& DynamicLibrary::operator=(DynamicLibrary&& other) noexcept {
 }
 
 bool DynamicLibrary::Load(const std::filesystem::path& path, SymbolResolution mode) {
-  (void)path;
   (void)mode;
   Close();
+  const std::string fname = path.filename().string();
+  for (auto& m : StaticModules()) {
+    if (fname == m.name) {
+      handle_ = &m;
+      return true;
+    }
+  }
   return false;
 }
 
@@ -51,7 +86,10 @@ void DynamicLibrary::Close() {
 }
 
 void* DynamicLibrary::GetRawSymbol(const char* name) const {
-  (void)name;
+  if (!handle_ || !name) return nullptr;
+  const auto* m = static_cast<const StaticModuleEntry*>(handle_);
+  if (std::strcmp(name, "ReXModule_Register") == 0) return m->reg_fn;
+  if (std::strcmp(name, "ReXModule_GetImageInfo") == 0) return m->info_fn;
   return nullptr;
 }
 

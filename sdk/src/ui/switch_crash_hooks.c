@@ -29,6 +29,7 @@
 #include <fcntl.h>
 #include <sys/iosupport.h>
 #include <sys/stat.h>
+#include <sys/stdio.h>
 #include <unistd.h>
 
 #include <switch.h>
@@ -170,12 +171,12 @@ static ssize_t RexStderrWrite(struct _reent* r, void* fd, const char* ptr, size_
 /* sdk/src/core/logging.cpp, once the log levels are known: on (1) when anything is logged. */
 void RexSwitchStderrToFile(int on) {
     if (!on || g_rex_stderr_to_file) return;
-    flockfile(stderr);
+    _flockfile(stderr);
     g_rex_stderr_to_file = 1;
     const int file = RexStderrFile();
     if (file >= 0 && g_rex_stderr_kept) write(file, g_rex_stderr_keep, g_rex_stderr_kept);
     g_rex_stderr_kept = 0;
-    funlockfile(stderr);
+    _funlockfile(stderr);
 }
 
 /* For the crash report: what stderr saw while it was kept in memory (NULL when it goes to rex_stderr.log). Read

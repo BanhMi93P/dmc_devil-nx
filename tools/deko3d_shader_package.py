@@ -71,45 +71,104 @@ def main():
     if not names:
         sys.exit(f'deko3d_shader_package: no shaders in {a.glsl}')
     os.makedirs(a.out, exist_ok=True)
-    with tempfile.TemporaryDirectory(dir=a.out) as tmp:
-        if a.only:
-            # The dictionary is trained on the shaders packaged, so they alone go to a folder of their own.
-            chosen = os.path.join(tmp, 'glsl')
-            os.makedirs(chosen)
-            for n in names:
-                shutil.copyfile(os.path.join(a.glsl, n), os.path.join(chosen, n))
-            a.glsl = chosen
-        files = [fwd(os.path.relpath(os.path.join(a.glsl, n))) for n in names]
-        zdir = fwd(os.path.relpath(os.path.join(tmp, 'z')))
-        if a.raw:
-            dictionary = b''
-        else:
-            dict_path = fwd(os.path.relpath(os.path.join(tmp, 'dict')))
-            # zstd wants 10x (better 100x) the dictionary's size to train on: a small --only package gets a smaller one.
-            raw = sum(os.path.getsize(os.path.join(a.glsl, n)) for n in names)
-            maxdict = max(4096, min(131072, raw // 100))
-            subprocess.run([ZSTD, '--train', '-q', f'--maxdict={maxdict}', '-o', dict_path, '-r',
-                            fwd(os.path.relpath(a.glsl))], check=True)
-            os.makedirs(zdir, exist_ok=True)
-            for i in range(0, len(files), 300):
-                subprocess.run([ZSTD, f'-{a.level}', '-q', '-f', '-D', dict_path, '--output-dir-flat', zdir] +
-                               files[i:i + 300], check=True)
-            dictionary = open(dict_path, 'rb').read()
+    zstd_mod = None
+    if not a.raw:
+        try:
+            import zstandard as zstd_mod
+        except ImportError:
+            zstd_mod = None
+    if not a.raw and zstd_mod is not None:
+        import concurrent.futures
+        import threading
+        glsl_dir = a.glsl
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+            texts = list(ex.map(lambda n: open(os.path.join(glsl_dir, n), 'rb').read(), names, chunksize=128))
+        raw = sum(len(t) for t in texts)
+        maxdict = max(4096, min(131072, raw // 100))
+        step = max(1, len(texts) // 2000)
+        samples = []
+        sample_bytes = 0
+        for t in texts[::step]:
+            samples.append(t)
+            sample_bytes += len(t)
+            if sample_bytes >= 24 << 20:
+                break
+        dictionary = zstd_mod.train_dictionary(maxdict, samples).as_bytes()
+        cdict = zstd_mod.ZstdCompressionDict(dictionary)
+        tls = threading.local()
+        level = int(a.level)
+
+        def _comp(t):
+            c = getattr(tls, 'c', None)
+            if c is None:
+                c = zstd_mod.ZstdCompressor(level=level, dict_data=cdict, write_content_size=True)
+                tls.c = c
+            return c.compress(t)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+            comps = list(ex.map(_comp, texts, chunksize=128))
+        dctx = zstd_mod.ZstdDecompressor(dict_data=cdict)
+        for idx in list(range(min(50, len(texts)))) + list(range(max(0, len(texts) - 50), len(texts))):
+            if dctx.decompress(comps[idx]) != texts[idx]:
+                sys.exit(f'deko3d_shader_package: round-trip check failed for {names[idx]}')
         entries = []
         data = bytearray()
-        for n in names:
-            text = open(os.path.join(a.glsl, n), 'rb').read()
-            comp = raw_frame(text) if a.raw else open(os.path.join(zdir, n + '.zst'), 'rb').read()
+        mask_re = re.compile(rb'#define SPIRV_CROSS_CONSTANT_ID_(\d+) ')
+        for n, text, comp in zip(names, texts, comps):
             h = int(n[3:19], 16)
             stage = 4 if n.startswith('ps_') else 0
             mask = [0] * 8
-            for m in re.finditer(rb'#define SPIRV_CROSS_CONSTANT_ID_(\d+) ', text):
+            for m in mask_re.finditer(text):
                 i = int(m.group(1))
                 if 1000 <= i < 1256:
                     mask[(i - 1000) // 32] |= 1 << ((i - 1000) % 32)
             entries.append((h, len(data), len(comp), len(text), stage, mask))
             data += comp
             data += b'\0' * (-len(data) % 8)
+    else:
+        with tempfile.TemporaryDirectory(dir=a.out) as tmp:
+            if a.only:
+                # The dictionary is trained on the shaders packaged, so they alone go to a folder of their own.
+                chosen = os.path.join(tmp, 'glsl')
+                os.makedirs(chosen)
+                for n in names:
+                    shutil.copyfile(os.path.join(a.glsl, n), os.path.join(chosen, n))
+                a.glsl = chosen
+            files = [fwd(os.path.relpath(os.path.join(a.glsl, n))) for n in names]
+            zdir = fwd(os.path.relpath(os.path.join(tmp, 'z')))
+            if a.raw:
+                dictionary = b''
+            else:
+                dict_path = fwd(os.path.relpath(os.path.join(tmp, 'dict')))
+                # zstd wants 10x (better 100x) the dictionary's size to train on: a small --only package gets a smaller one.
+                raw = sum(os.path.getsize(os.path.join(a.glsl, n)) for n in names)
+                maxdict = max(4096, min(131072, raw // 100))
+                subprocess.run([ZSTD, '--train', '-q', f'--maxdict={maxdict}', '-o', dict_path, '-r',
+                                fwd(os.path.relpath(a.glsl))], check=True)
+                os.makedirs(zdir, exist_ok=True)
+                import concurrent.futures
+                chunks = [files[i:i + 300] for i in range(0, len(files), 300)]
+                def _zbatch(chunk):
+                    subprocess.run([ZSTD, f'-{a.level}', '-q', '-f', '-D', dict_path, '--output-dir-flat', zdir] +
+                                   chunk, check=True)
+                with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+                    list(ex.map(_zbatch, chunks))
+                dictionary = open(dict_path, 'rb').read()
+            entries = []
+            data = bytearray()
+            for n in names:
+                text = open(os.path.join(a.glsl, n), 'rb').read()
+                comp = raw_frame(text) if a.raw else open(os.path.join(zdir, n + '.zst'), 'rb').read()
+                h = int(n[3:19], 16)
+                stage = 4 if n.startswith('ps_') else 0
+                mask = [0] * 8
+                for m in re.finditer(rb'#define SPIRV_CROSS_CONSTANT_ID_(\d+) ', text):
+                    i = int(m.group(1))
+                    if 1000 <= i < 1256:
+                        mask[(i - 1000) // 32] |= 1 << ((i - 1000) % 32)
+                entries.append((h, len(data), len(comp), len(text), stage, mask))
+                data += comp
+                data += b'\0' * (-len(data) % 8)
     entries.sort(key=lambda e: e[0])
     header_size = 32
     dict_off = header_size

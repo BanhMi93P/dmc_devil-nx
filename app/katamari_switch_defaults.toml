@@ -1,0 +1,63 @@
+# DmC: Devil May Cry for Nintendo Switch — built-in renderer, UE3 safety, and system defaults
+# Applied before dmc_devil.toml (app/CMakeLists.txt, app/src/renut_app.h BuiltInConfig).
+
+banjo_renderer = "renut"
+renut_gpu_backend = "deko3d"
+gpu_plugin = ""
+masseffect_renderer_native = false
+gpu_allow_invalid_fetch_constants = true
+
+# UE3 & Deko3D renderer safety defaults (prevents black textures, stale target reuse, stalls)
+banjo_renut_core_layout = false
+banjo_renut_resolve_skip = true
+banjo_renut_alpha_to_mask_test = false
+banjo_deko3d_native_16bit = false
+banjo_renut_dynamic_texture_rows = false
+banjo_renut_keep_unused_targets = false
+blur_renut_texture_pool = false
+banjo_renut_stream_redeem = false
+
+# Latency, pacing & allocator safety
+banjo_async_present = false
+blur_small_alloc_mb = 0
+banjo_system_core = 0
+banjo_system_core_uam = false
+banjo_deko3d_compile_wait_boost = false
+audio_xma_kick_without_lock = false
+
+# Deko3D speed-ups & dynamic resolution
+banjo_deko3d_depth_handover = true
+banjo_deko3d_depth24 = true
+banjo_deko3d_push_constants = true
+banjo_deko3d_ring_cleaner = true
+banjo_deko3d_kick_submit = true
+banjo_deko3d_txq_constants = true
+banjo_deko3d_early_z = true
+banjo_deko3d_async_variants = true
+banjo_deko3d_uam_wide_rows = true
+banjo_renut_depth_words_lazy = true
+banjo_renut_device_swizzle = true
+banjo_renut_store_cards = true
+banjo_renut_cpu_memos = true
+banjo_renut_pipeline_memo = true
+banjo_renut_literals_resident = true
+banjo_renut_clear_repeat = true
+banjo_gpu_boost = true
+banjo_display_sync = true
+banjo_display_phase_auto = true
+banjo_display_phase_max_us = 12000
+
+# DLC & license
+dlc_enabled = true
+renut_dlc_folder = "dlc"
+license_mask = 1
+
+# Release logging defaults (override in dmc_devil.toml when capturing logs)
+log_level = "warn"
+log_file_writer = false
+banjo_show_profiler = false
+banjo_show_fps = false
+banjo_cpu_profiler = false
+switch_profile_stacks = false
+banjo_stall_watch_seconds = 0
+switch_software_keyboard = true

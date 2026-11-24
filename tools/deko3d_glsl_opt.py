@@ -3269,6 +3269,16 @@ def check_one(item):
     return name, ''
 
 
+def _opt_file(item):
+    src_dir, out_dir, name, passes = item
+    with open(os.path.join(src_dir, name), encoding='utf-8') as f:
+        text = f.read()
+    out = optimise(text, passes, 'frag' if name.startswith('ps_') else 'vert', name[3:19])
+    with open(os.path.join(out_dir, name), 'w', encoding='utf-8', newline='\n') as f:
+        f.write(out)
+    return 1
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--in', dest='src')
@@ -3284,6 +3294,18 @@ def main():
             print(f'{name}: {fn.__doc__.split(".")[0].strip()}')
         return 0
     os.makedirs(a.out, exist_ok=True)
+    if not a.check and a.jobs > 1:
+        import concurrent.futures
+        names = [n for n in sorted(os.listdir(a.src)) if re.fullmatch(r'(vs|ps)_[0-9A-F]{16}\.glsl', n)]
+        tasks = ((a.src, a.out, name, a.passes) for name in names)
+        done = 0
+        with concurrent.futures.ProcessPoolExecutor(max_workers=a.jobs) as ex:
+            for _ in ex.map(_opt_file, tasks, chunksize=64):
+                done += 1
+                if done % 2000 == 0 or done == len(names):
+                    print(f'deko3d_glsl_opt: {done}/{len(names)} ({done * 100.0 / len(names):.1f}%)', flush=True)
+        print(f'deko3d_glsl_opt: {len(names)} shaders, passes {a.passes} -> {a.out}')
+        return 0
     sources = {}
     texts = {}
     for name in sorted(os.listdir(a.src)):

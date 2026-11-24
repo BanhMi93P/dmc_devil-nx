@@ -8,15 +8,15 @@
 #include <rex/logging.h>
 #include <rex/platform.h>
 
-#if REX_PLATFORM_SWITCH
+#if REX_PLATFORM_SWITCH && REX_HAS_OPUS
 #include <opus.h>
-#else
+#elif !REX_PLATFORM_SWITCH
 #include <rex/platform/dynlib.h>
 #endif
 
 namespace rex::audio::xmo_opus {
 
-#if REX_PLATFORM_SWITCH
+#if REX_PLATFORM_SWITCH && REX_HAS_OPUS
 
 struct Decoder {
   OpusDecoder* d;
@@ -42,6 +42,26 @@ void Reset(Decoder* decoder) { opus_decoder_ctl(decoder->d, OPUS_RESET_STATE); }
 
 int Decode(Decoder* decoder, const uint8_t* packet, int size, float* pcm, int max_samples) {
   return opus_decode_float(decoder->d, packet, size, pcm, max_samples, 0);
+}
+
+#elif REX_PLATFORM_SWITCH  // built without switch-libopus
+
+struct Decoder {};
+
+Decoder* Create(int /*channels*/, int /*rate*/) {
+  static std::once_flag once;
+  std::call_once(once, [] {
+    REXAPU_WARN("[xmo] libopus was not linked at build time: .xmo sounds are silent");
+  });
+  return nullptr;
+}
+
+void Destroy(Decoder* /*decoder*/) {}
+
+void Reset(Decoder* /*decoder*/) {}
+
+int Decode(Decoder* /*decoder*/, const uint8_t* /*packet*/, int /*size*/, float* /*pcm*/, int /*max_samples*/) {
+  return -1;
 }
 
 #else  // a PC: libopus loaded on first use

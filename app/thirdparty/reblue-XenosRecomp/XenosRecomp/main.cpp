@@ -240,6 +240,16 @@ int main(int argc, char** argv)
 #ifdef RENUT_RECOMP
         if (!hlslDumpDir.empty())
             std::filesystem::create_directories(hlslDumpDir);
+        const char* dekoDirEnv = std::getenv("BANJO_DEKO3D_SPIRV_DIR");
+        const bool dekoOnly = (dekoDirEnv && *dekoDirEnv &&
+            std::getenv("BANJO_DEKO3D_ONLY") && *std::getenv("BANJO_DEKO3D_ONLY") == '1');
+        if (dekoDirEnv && *dekoDirEnv)
+        {
+            std::error_code dekoEc;
+            std::filesystem::create_directories(dekoDirEnv, dekoEc);
+        }
+        fmt::println("Loaded {} unique shaders, compiling{}...", shaders.size(), dekoOnly ? " (BANJO_DEKO3D_ONLY)" : "");
+        fflush(stdout);
 #endif
 
         std::atomic<uint32_t> progress = 0;
@@ -359,6 +369,43 @@ int main(int argc, char** argv)
 
                 thread_local DxcCompiler dxcCompiler;
 
+#ifdef RENUT_RECOMP
+                if (dekoOnly)
+                {
+                    const std::string stem = fmt::format("{}_{:016X}", recompiler.isPixelShader ? "ps" : "vs", hash);
+                    const std::string path = (std::filesystem::path(dekoDirEnv) / (stem + ".spv")).string();
+                    std::error_code ec;
+                    if (!std::filesystem::is_regular_file(path, ec))
+                    {
+                        IDxcBlob* deko = dxcCompiler.compile(recompiler.out, recompiler.isPixelShader, false, true, true);
+                        if (deko == nullptr && !originalHlsl.empty())
+                        {
+                            recompiler.out = std::move(originalHlsl);
+                            originalHlsl.clear();
+                            banjoOverrideFallbacks.fetch_add(1, std::memory_order_relaxed);
+                            deko = dxcCompiler.compile(recompiler.out, recompiler.isPixelShader, false, true, true);
+                        }
+                        if (deko != nullptr)
+                        {
+                            writeAllBytes(path.c_str(), deko->GetBufferPointer(), deko->GetBufferSize());
+                            deko->Release();
+                        }
+                        else
+                        {
+                            const std::string failPath = (std::filesystem::path(dekoDirEnv) / (stem + ".fail")).string();
+                            writeAllBytes(failPath.c_str(), "dxc", 3);
+                        }
+                    }
+                    size_t currentProgress = ++progress;
+                    if ((currentProgress % 500) == 0 || (currentProgress == shaders.size()))
+                    {
+                        fmt::println("deko3d SPIR-V... {}/{} ({:.1f}%)", currentProgress, shaders.size(), currentProgress / float(shaders.size()) * 100.0f);
+                        fflush(stdout);
+                    }
+                    return;
+                }
+#endif
+
 #ifdef XENOS_RECOMP_DXIL
                 shader.dxil = dxcCompiler.compile(recompiler.out, recompiler.isPixelShader, recompiler.specConstantsMask != 0, false);
 #ifdef RENUT_RECOMP
@@ -440,6 +487,15 @@ int main(int argc, char** argv)
                 if ((currentProgress % 10) == 0 || (currentProgress == shaders.size() - 1))
                     fmt::println("Recompiling shaders... {}%", currentProgress / float(shaders.size()) * 100.0f);
             });
+
+#ifdef RENUT_RECOMP
+        if (dekoOnly)
+        {
+            fmt::println("BANJO_DEKO3D_ONLY done: {} shaders processed, {} override fallbacks.", shaders.size(), banjoOverrideFallbacks.load());
+            fflush(stdout);
+            return 0;
+        }
+#endif
 
         if (!g_failures.empty())
         {

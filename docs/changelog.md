@@ -1,5 +1,12 @@
 # DmC: Devil May Cry Port Changelog
 
+## Phase 3 — Nintendo Switch (`deko3d`, Sidecar Shaders)
+- Built Nintendo Switch `deko3d`-only NRO (`output/dmc_devil/dmc_devil.nro`, `109,074,659` B / `104.02 MiB`, `REXGLUE_SWITCH_NVK=OFF`, `BANJO_RENUT_RELEASE_SHADERS=ON`, `BLUR_FPCR_ONE_MODE=ON`, `KATAMARI_BUILTIN_CONFIG=ON`), embedded `30,891` B 256x256 JPEG cover icon, and preserved UTF-8 NACP metadata (`DmC - Devil May Cry`, Author `Bánh Mì`, `1.0.0`) via `sdk/cmake/patch_nacp_utf8.py` + `sdk/cmake/rexglue_switch.cmake`.
+- Added static Switch module loading for `NTJobCode.xex` (`sdk/src/core/dynlib_switch.cpp`, `app/CMakeLists.txt`, `app/src/renut_app.h`) and UE3/deko3d Switch safety defaults (`app/katamari_switch_defaults.toml`, `app/katamari_switch.toml`).
+- Fixed devkitA64 GCC 15 + newlib / `uam` compatibility: made `switch-libopus` optional (`REX_HAS_OPUS` in `sdk/src/filesystem/CMakeLists.txt`, `opus_decoder.cpp`, `xmo_opus.cpp`), replaced `std::aligned_alloc` with `memalign` (`switch_audio_system.cpp`, `blur_small_alloc.cpp`), switched `switch_crash_hooks.c` to `_flockfile`/`_funlockfile`, and replaced struct value copies in `rectangle_list_gs.hlsl` with `EMIT_RECTANGLE` indexing for `uam` register budget.
+- Packaged all `35,734 / 35,734` optimized `deko3d` GLSL shaders into `output/dmc_devil/deko3d_glsl.bin` (`111,928,528` B / `106.74 MiB`, `BDKG` v1 with 128 KB zstd dictionary, round-trip verified) after adding `BANJO_DEKO3D_ONLY=1` (`XenosRecomp/main.cpp`), multi-process `deko3d_glsl_opt.py`, and zero-temp-file in-memory `zstandard` compression (`deko3d_shader_package.py`).
+- Deferred Title Update (`TU_11K6214`) auto-extraction and DLC verification until after initial Base Switch console boot test (documented in `docs/dmc_devil-notes.md`).
+
 ## Phase 2B — PC Native Renderer (`renut` Vulkan) Verification
 - Implemented UE3 stacked 2D array (`16x16x16`) over 2D colour resolve (`16x512`) aliasing in `textures.{h,cpp}` and `draw.cpp` (`StackedResolveSource`, `CopyStackedResolve`, `NoteColorResolveWrittenLocked`, `MaterialiseHandOverLocked`), resolving Mission 1 black screen.
 - Fixed `SyncColorViewLocked` (`draw.cpp`) to compare `write_seq` instead of `bound_serial`, eliminating false `Resolve through a view of format` warnings.

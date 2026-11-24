@@ -30,27 +30,6 @@ struct Vertex
     float clipDistance : SV_ClipDistance0;
 };
 
-// a + b - c for every output: the corner across the diagonal a-b from c.
-Vertex Opposite(Vertex a, Vertex b, Vertex c)
-{
-    Vertex d;
-    d.position = a.position + b.position - c.position;
-    [unroll] for (uint i = 0; i < 16; ++i)
-        d.texcoord[i] = a.texcoord[i] + b.texcoord[i] - c.texcoord[i];
-    [unroll] for (uint j = 0; j < 2; ++j)
-        d.color[j] = a.color[j] + b.color[j] - c.color[j];
-    [unroll] for (uint k = 0; k < 3; ++k)
-        d.normal[k] = a.normal[k] + b.normal[k] - c.normal[k];
-    d.tangent = a.tangent + b.tangent - c.tangent;
-    d.binormal = a.binormal + b.binormal - c.binormal;
-    d.fog = a.fog + b.fog - c.fog;
-    d.position2 = a.position2 + b.position2 - c.position2;
-    d.pointCoord = a.pointCoord + b.pointCoord - c.pointCoord;
-    d.pointSize = a.pointSize + b.pointSize - c.pointSize;
-    d.clipDistance = a.clipDistance + b.clipDistance - c.clipDistance;  // renut-ultimate
-    return d;
-}
-
 float2 ScreenPosition(Vertex v)
 {
     return v.position.xy / v.position.w;
@@ -63,14 +42,31 @@ float Skew(float2 p, float2 a, float2 b)
     return abs(dot(a - p, b - p));
 }
 
-// The strip from the right angle c, then a and b, then the corner across the diagonal a-b.
-void EmitRectangle(Vertex c, Vertex a, Vertex b, inout TriangleStream<Vertex> output)
-{
-    output.Append(c);
-    output.Append(a);
-    output.Append(b);
-    output.Append(Opposite(a, b, c));
-}
+// The strip from the right angle C, then A and B, then the corner across the diagonal A-B (a + b - c).
+// Written as a macro indexing `input` directly so DXC/SPIRV-Cross do not hoist all 3 Vertex structs
+// into live registers before EmitVertex(), which exceeded uam's GS register allocation after SV_ClipDistance0.
+#define EMIT_RECTANGLE(C, A, B) \
+    do { \
+        output.Append(input[C]); \
+        output.Append(input[A]); \
+        output.Append(input[B]); \
+        Vertex d; \
+        d.position = input[A].position + input[B].position - input[C].position; \
+        [unroll] for (uint i = 0; i < 16; ++i) \
+            d.texcoord[i] = input[A].texcoord[i] + input[B].texcoord[i] - input[C].texcoord[i]; \
+        [unroll] for (uint j = 0; j < 2; ++j) \
+            d.color[j] = input[A].color[j] + input[B].color[j] - input[C].color[j]; \
+        [unroll] for (uint k = 0; k < 3; ++k) \
+            d.normal[k] = input[A].normal[k] + input[B].normal[k] - input[C].normal[k]; \
+        d.tangent = input[A].tangent + input[B].tangent - input[C].tangent; \
+        d.binormal = input[A].binormal + input[B].binormal - input[C].binormal; \
+        d.fog = input[A].fog + input[B].fog - input[C].fog; \
+        d.position2 = input[A].position2 + input[B].position2 - input[C].position2; \
+        d.pointCoord = input[A].pointCoord + input[B].pointCoord - input[C].pointCoord; \
+        d.pointSize = input[A].pointSize + input[B].pointSize - input[C].pointSize; \
+        d.clipDistance = input[A].clipDistance + input[B].clipDistance - input[C].clipDistance; \
+        output.Append(d); \
+    } while (false)
 
 [maxvertexcount(4)]
 void main(triangle Vertex input[3], inout TriangleStream<Vertex> output)
@@ -93,9 +89,9 @@ void main(triangle Vertex input[3], inout TriangleStream<Vertex> output)
     // input[corner] with a run-time index made SPIRV-Cross copy the three vertices into a local array of structs
     // (fnxf_xiii: 52 KB of scratch a warp and 255 registers in uam's GS). The same vertices in the same order.
     if (corner == 0)
-        EmitRectangle(input[0], input[1], input[2], output);
+        EMIT_RECTANGLE(0, 1, 2);
     else if (corner == 1)
-        EmitRectangle(input[1], input[2], input[0], output);
+        EMIT_RECTANGLE(1, 2, 0);
     else
-        EmitRectangle(input[2], input[0], input[1], output);
+        EMIT_RECTANGLE(2, 0, 1);
 }

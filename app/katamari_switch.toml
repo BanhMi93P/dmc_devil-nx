@@ -1,0 +1,67 @@
+# DmC: Devil May Cry — Switch User Settings (dmc_devil.toml)
+# Delete this file to regenerate defaults at next launch.
+
+# Language: "auto" (Switch system language), "english", "french", "german", "italian", "spanish", "japanese"
+language = "english"
+
+# Display & Resolution (deko3d native)
+banjo_renut_render_height_handheld = 720
+banjo_renut_render_height_docked = 1080
+banjo_renut_dynamic_resolution = true
+banjo_renut_dynamic_handheld_low = 540
+banjo_renut_dynamic_handheld_high = 720
+banjo_renut_dynamic_docked_low = 720
+banjo_renut_dynamic_docked_high = 1080
+banjo_renut_dynamic_steps = 4
+sasrt_dynamic_lines_handheld = 18
+sasrt_dynamic_lines_docked = 36
+banjo_renut_dynamic_gpu_ms = 27.5
+sasrt_dynamic_cpu_aware = false
+banjo_renut_dynamic_up_s = 2.0
+
+# Controls
+input_xbox_layout = true
+input_joycon_sideways = true
+input_rumble = true
+
+# Logging (set log_level = "info" and log_file_writer = true to capture logs in logs/rex/)
+log_level = "info"
+log_file_writer = true
+banjo_show_fps = false
+banjo_show_profiler = false
+
+[input_p1]
+a = ""
+b = ""
+x = ""
+y = ""
+lb = ""
+rb = ""
+lt = ""
+rt = ""
+start = ""
+back = ""
+ls = ""
+rs = ""
+up = ""
+down = ""
+left = ""
+right = ""
+
+[input_p2]
+a = ""
+b = ""
+x = ""
+y = ""
+lb = ""
+rb = ""
+lt = ""
+rt = ""
+start = ""
+back = ""
+ls = ""
+rs = ""
+up = ""
+down = ""
+left = ""
+right = ""

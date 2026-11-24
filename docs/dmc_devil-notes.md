@@ -30,3 +30,18 @@
   - `banjo_deko3d_native_16bit = false`, `banjo_renut_dynamic_texture_rows = false`, `banjo_renut_keep_unused_targets = false`, `blur_renut_texture_pool = false`, `banjo_renut_stream_redeem = false`
   - `banjo_async_present = false`, `blur_small_alloc_mb = 0`, `banjo_system_core = 0`, `banjo_renut_core_layout = false`
 - Release shader packaging (`BANJO_RENUT_RELEASE_SHADERS=ON`): embeds shader metadata table (`shader_cache_switch.cpp`) in the NRO and reads `deko3d_glsl.bin` from the NRO directory on SD.
+- **Verified Switch Package (`output/dmc_devil/`):**
+  - `dmc_devil.nro`: `109,074,659` bytes (`104.02 MiB`), `NRO0` + `ASET`, NACP Title `DmC - Devil May Cry`, Author `Bánh Mì`, Version `1.0.0`, embedded `30,891` B JPEG icon.
+  - `deko3d_glsl.bin`: `111,928,528` bytes (`106.74 MiB`), `BDKG` v1, `35,734 / 35,734` shaders (`0` `.spv` failures), `131,072` B zstd dictionary (round-trip verified).
+  - Tooling/Switch fixes: `BANJO_DEKO3D_ONLY=1` (`XenosRecomp/main.cpp`), parallel `deko3d_glsl_opt.py`, in-memory `zstandard` in `deko3d_shader_package.py`, optional `REX_HAS_OPUS` (`libopus`), `memalign` / `_flockfile` newlib fixes, `rectangle_list_gs.hlsl` `EMIT_RECTANGLE` for `uam`, and `patch_nacp_utf8.py` for UTF-8 NACP on Windows.
+
+## Update & DLC (Deferred / TODO)
+- **Do NOT copy `game/` into `output/dmc_devil/`:** User keeps extracted Base `game/` directly on the Switch SD card (`sdmc:/switch/dmc_devil/game/`).
+- **Title Update (`Update/TU_11K6214_000000S000000.0000000000087`, `3.03 MB`, STFS `LIVE`, `ctype=0xB0000`):**
+  - Contains 6 files: `default.xexp` (`1,972,224` B), `Binaries\NTJobCode\xenon\submission\NTJobCode.xexp` (`4,096` B), `DevilGame\CookedXbox360\ConceptArt_Kat_004_SF.xxx` (`128 KB`), `ConceptArt_Kat_008_SF.xxx` (`128 KB`), `ConceptArt_Thumbnails_SF.xxx` (`512 KB`), `DevilHUD_Thumbnails_SF.xxx` (`192 KB`).
+  - **Deferred for initial Base test (`Update/` left empty):** Current `dmc_devil.nro` is statically recompiled from Base `default.xex` + `NTJobCode.xex` (`0.0.0.7`), and SDK `update:` expects extracted files rather than raw STFS containers.
+  - **Future TODO:** Build an auto-installer / STFS extractor (similar to Asura's Wrath) when raw `TU_*` packages exist in `Update/`, and recompile a Base+TU NRO if DLC (*Vergil's Downfall* / *Bloody Palace*) requires Title Update code changes.
+- **DLC (`DLC/`, 5 `LIVE` STFS packages, `ctype=0x2`, `Title ID 43430824`):**
+  - `8F7A42E2...` (*Vergil Premium DLC*, `1.99 GB`), `C25FEE1E...` (*Bloody Palace DLC*, `211 MB`), `12BEB557...` (*Samurai Weapon Pack*, `3.5 MB`), `38ADB7CE...` (*Gold Weapon Pack*, `3.2 MB`), `C5952365...` (*Bone Weapon Pack*, `4.1 MB`).
+  - `renut_nx_ultimate_base` (`app/src/renut_engine/dlc_install.cpp`) already supports reading raw `LIVE` DLC packages in place from `sdmc:/switch/dmc_devil/dlc/` via `StfsContainerDevice` (writing only small `.header` files).
+  - **Deferred for initial Base test (`dlc/` left empty):** Verify DLC read-in-place and auto-installer behavior in-game once the Base build passes Switch console testing (and add fallback extraction if any package fails read-in-place).
