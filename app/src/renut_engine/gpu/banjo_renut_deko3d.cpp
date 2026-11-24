@@ -327,6 +327,24 @@ constexpr char kCacheTag[16] = "uam110-sw8-bnx4";
 
 constexpr uint32_t kDkshMagic = 0x48534B44u;  // "DKSH", the first word of every record's data
 
+#pragma pack(push, 1)
+struct BdkiHeader {
+  char magic[4];       // "BDKI"
+  uint32_t version;    // 1
+  char tag[16];        // kCacheTag
+  uint64_t cache_end;  // BDKC end offset covered by this index
+  uint32_t count;      // number of BdkiEntry records
+  uint32_t reserved;   // 0
+};
+struct BdkiEntry {
+  uint64_t key;
+  uint64_t offset;
+  uint32_t size;
+  uint32_t pad;
+};
+#pragma pack(pop)
+static_assert(sizeof(BdkiHeader) == 40 && sizeof(BdkiEntry) == 24);
+
 struct DkshCache {
   std::mutex mutex;
   FILE *file = nullptr;
@@ -338,6 +356,71 @@ struct DkshCache {
 };
 DkshCache g_cache;
 
+static bool TryLoadSidecarIndex(DkshCache &c, long file_length, long &out_at) {
+  const std::string idx_path = c.path + ".idx";
+  FILE *idx_f = std::fopen(idx_path.c_str(), "rb");
+  if (!idx_f)
+    return false;
+  BdkiHeader hdr{};
+  if (std::fread(&hdr, 1, sizeof(hdr), idx_f) != sizeof(hdr) || std::memcmp(hdr.magic, "BDKI", 4) != 0 ||
+      hdr.version != 1 || std::memcmp(hdr.tag, kCacheTag, sizeof(kCacheTag)) != 0 || hdr.cache_end < 24 ||
+      hdr.cache_end > uint64_t(file_length) || hdr.count == 0 || hdr.count > 500000u) {
+    std::fclose(idx_f);
+    return false;
+  }
+  std::vector<BdkiEntry> entries(hdr.count);
+  const bool read_ok = std::fread(entries.data(), sizeof(BdkiEntry), hdr.count, idx_f) == hdr.count;
+  std::fclose(idx_f);
+  if (!read_ok)
+    return false;
+
+  auto check_spot = [&](const BdkiEntry &e) {
+    if (e.offset < 36 || e.size < 64 || e.size > (16u << 20) || e.offset + e.size > hdr.cache_end)
+      return false;
+    uint32_t magic = 0;
+    return std::fseek(c.file, long(e.offset), SEEK_SET) == 0 && std::fread(&magic, sizeof(magic), 1, c.file) == 1 &&
+           magic == kDkshMagic;
+  };
+  if (!check_spot(entries.front()) || !check_spot(entries.back()))
+    return false;
+
+  c.index.reserve(entries.size() + 256);
+  for (const BdkiEntry &e : entries)
+    c.index[e.key] = {long(e.offset), e.size};
+  out_at = long(hdr.cache_end);
+  return true;
+}
+
+static void WriteSidecarIndex(const DkshCache &c) {
+  if (c.index.empty() || c.end < 24)
+    return;
+  const std::string idx_path = c.path + ".idx";
+  const std::string tmp_path = idx_path + ".tmp";
+  FILE *f = std::fopen(tmp_path.c_str(), "wb");
+  if (!f)
+    return;
+  BdkiHeader hdr{};
+  std::memcpy(hdr.magic, "BDKI", 4);
+  hdr.version = 1;
+  std::memcpy(hdr.tag, kCacheTag, sizeof(kCacheTag));
+  hdr.cache_end = uint64_t(c.end);
+  hdr.count = uint32_t(c.index.size());
+  std::vector<BdkiEntry> entries;
+  entries.reserve(c.index.size());
+  for (const auto &kv : c.index)
+    entries.push_back({kv.first, uint64_t(kv.second.first), kv.second.second, 0});
+  const bool ok = std::fwrite(&hdr, sizeof(hdr), 1, f) == 1 &&
+                  std::fwrite(entries.data(), sizeof(BdkiEntry), entries.size(), f) == entries.size() &&
+                  std::fflush(f) == 0;
+  std::fclose(f);
+  if (!ok) {
+    std::remove(tmp_path.c_str());
+    return;
+  }
+  std::remove(idx_path.c_str());
+  std::rename(tmp_path.c_str(), idx_path.c_str());
+}
+
 void LoadCache() {
   DkshCache &c = g_cache;
   // banjo-nx (2026-10-18): the code uam makes with other flags (banjo_deko3d_uam_prmt, banjo_deko3d_uam_gvn off) has a
@@ -347,6 +430,7 @@ void LoadCache() {
                                           : "deko3d_shaders_f" + std::to_string(flags) + ".bin").string();
   c.file = std::fopen(c.path.c_str(), "r+b");
   bool fresh = c.file == nullptr;
+  bool indexed = false;
   if (c.file) {
     char head[24] = {};
     if (std::fread(head, 1, sizeof(head), c.file) != sizeof(head) || std::memcmp(head, "BDKC", 4) != 0 ||
@@ -364,6 +448,8 @@ void LoadCache() {
       // went after such a record, where the next start's walk never found them: Ryujinx runs 20-22 compiled the same
       // ~30 shaders on every start.
       long at = sizeof(head);
+      indexed = TryLoadSidecarIndex(c, length, at);
+      const long idx_end = at;
       for (;;) {
         uint64_t key;
         uint32_t size, magic;
@@ -383,6 +469,8 @@ void LoadCache() {
         if (ftruncate(fileno(c.file), at) != 0)
           REXLOG_WARN("[deko3d] DKSH cache {}: could not be cut; new records overwrite the rest", c.path);
       }
+      if ((!indexed || at != idx_end) && !c.index.empty())
+        WriteSidecarIndex(c);
     }
   }
   if (fresh) {
@@ -395,7 +483,8 @@ void LoadCache() {
       c.end = sizeof(head);
     }
   }
-  REXLOG_INFO("[deko3d] DKSH cache {}: {} variants{}", c.path, c.index.size(), c.file ? "" : " (cannot write it)");
+  REXLOG_INFO("[deko3d] DKSH cache {}: {} variants{}{}", c.path, c.index.size(), indexed ? " (indexed)" : "",
+              c.file ? "" : " (cannot write it)");
 }
 
 }  // namespace

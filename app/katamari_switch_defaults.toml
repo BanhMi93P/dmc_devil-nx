@@ -56,6 +56,7 @@ banjo_display_phase_max_us = 12000
 dlc_enabled = true
 renut_dlc_folder = "dlc"
 license_mask = 1
+input_xbox_layout = false
 
 # Release logging defaults (override in dmc_devil.toml when capturing logs)
 log_level = "warn"

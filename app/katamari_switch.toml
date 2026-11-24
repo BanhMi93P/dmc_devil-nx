@@ -20,7 +20,7 @@ sasrt_dynamic_cpu_aware = false
 banjo_renut_dynamic_up_s = 2.0
 
 # Controls
-input_xbox_layout = true
+input_xbox_layout = false
 input_joycon_sideways = true
 input_rumble = true
 
