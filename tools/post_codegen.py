@@ -227,10 +227,8 @@ def main():
         # original stays as it is: the hook's guard compares the two). Switch back: BANJO_HOT_LAZY_LOG10=OFF
         # (-DBANJO_LAZY_LOG10_ON=0) or the key banjo_cpu_native_sub_82B6A678.
         run(tool('limiter_lazy_log10.py'), '--hot', os.path.join(gen, 'hot'))
-    # cpu_aggressive C: the script interpreters' jump-table dispatch threaded into each handler (computed gotos, GCC
-    # cross-jumping off for these functions only). Switch back: REX_SWITCH_THREAD_OFF / REX_SWITCH_GOTO_OFF.
-    run(tool('switch_goto.py'), '--gen', gen, '--thread', '--only',
-        'sub_8299D480,sub_829A75E8,sub_8299E2E8,sub_82C3D4E8,sub_829AA068')
+    # cpu_aggressive C: per-game jump-table threading list (empty for DmC until profiled).
+    # run(tool('switch_goto.py'), '--gen', gen, '--thread', '--only', '...')
     # cpu_aggressive D: proven link-register write-backs (the value ctx.lr already holds) compile to nothing on the
     # Switch; REX_LR_WRITE_SAME_CHECK (PC verify) tests every one. Before r1_local.py (its patterns name ctx.r1).
     proofs = os.path.join(ROOT, 'out', 'cpu_aggressive_proofs')

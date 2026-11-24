@@ -1,1 +1,1 @@
-# katamari-nx: indirect call promotions (none until a PC census of this game)
+# DmC - Devil May Cry: promoted indirect-call sites (populated after PC census).

@@ -1,0 +1,167 @@
+# DmC - Devil May Cry (Title ID 43430824, XDK 2.0.21119.16384, D3D9LTCG) verified D3D map
+# Device offsets verified identical to Deadpool (gpu/d3d/d3d.h):
+#   CreationThreadId=+11016, IsTitleProcess=+11020, FenceTag=+11036, SwapFlags=+11069,
+#   IndexBuffer=+12812, RenderTargets=+12816, DepthStencil=+12832, StreamStrides=+12904,
+#   VertexShader=+13072, VerticesRingEnd=+13844, CommandBuffer=+13920,
+#   PresentFenceTag=+15344, SwapCount=+16968, BehaviorFlags=+24392.
+
+[core]
+Direct3D_CreateDevice                  0x82535A00  # verified disasm: alloc 24832/align128, InitApiState 0x825445E0, XenonGpu_Init 0x82545100, BehaviorFlags +24392
+D3D_XenonGpu_Initialize                0x82545100  # verified disasm: VdInitializeEngines 0x8254516C, VdSetGraphicsInterruptCallback 0x825451AC
+D3D_InitializeApiState                 0x825445E0  # verified disasm: RS table 0x835D4A10 (101), SS table 0x835D4ED0 (20), BehaviorFlags +24392
+D3D_InitializePresentationParameters   0x825448C0  # verified disasm: CreateTexture, CreateSurface x2, SetRenderTarget, SetDepthStencilSurface, SetGammaRamp
+D3D_CDevice_Uninitialize               0x82545070  # verified disasm: VdShutdownEngines 0x825450E0
+D3DDevice_Swap                         0x82539118  # verified disasm + d3d_match 0.87: SwapCount +16968, VdSwap 0x825394F4
+D3D_SynchronizeToPresentationInterval  0x825383C8  # verified disasm: called at 0x8254F70C before Swap 0x82539118; reads PresentInterval +14000
+D3DDevice_SetRingBufferParameters      0x82540FF0  # d3d_match 0.91: VdInitializeRingBuffer at 0x82541180
+D3D_CDevice_KickOff                    0x82540448  # d3d_match 0.96
+D3D_CDevice_KickOffSegment             0x8253FA30  # verified disasm + d3d_match 0.73: SwapFlags +11069, right after RingBufferDeviceAllocate
+D3D_CDevice_BeginRingBig               0x8253F298  # d3d_match 1.00
+D3D_RingBufferDeviceAllocate           0x8253F890  # verified disasm: CommandBuffer +13920, Fence +15320..15340
+D3D_CDevice_AllocateInlineData         0x8253F660  # d3d_match 1.00
+D3D_CDevice_BlockOnFence               0x82540978  # verified disasm: FenceTag +11036, calls D3D_CBlocker_Check 0x82535600
+D3D_CBlocker_Check                     0x82535600  # d3d_match 0.93
+D3DDevice_IsFencePending               0x82540EF0  # d3d_match 1.00
+IDirect3DQuery9::Issue                 0x8253B5E0  # d3d_match 1.00
+IDirect3DQuery9::GetData               0x8253B890  # verified in D3D query block right after Query::Issue
+D3DDevice_DrawVertices                 0x8253A440  # d3d_match 1.00
+D3DDevice_DrawIndexedVertices          0x8253A858  # d3d_match 1.00
+D3DDevice_DrawVerticesUP               0x82539E08  # d3d_match 1.00
+D3DDevice_BeginVertices                0x82539948  # d3d_match 1.00: StreamStrides +12904, VertexShader +13072
+D3DDevice_BeginIndexedVertices         0x82539E50  # d3d_match 1.00 (DP sub_82DA5AC8)
+D3DDevice_DrawIndexedVerticesUP        0x8253A3A0  # d3d_match 1.00 (DP sub_82DA6008), stride at caller stack +84
+D3DDevice_EndVertices                  0x82539938  # verified disasm: called inside Swap/vertices tail
+D3DDevice_ClearF                       0x82537818  # d3d_match 1.00 (DP sub_82DA25C0): DepthStencil +12832, Viewport +13024
+D3DDevice_Resolve                      0x8253F260  # verified disasm: loads ClearStencil at +92, calls D3D_Resolve 0x8253E180
+D3D_Resolve                            0x8253E180  # verified disasm: RenderTargets +12816, DepthStencil +12832
+D3DDevice_CreateTexture                0x82535008  # verified disasm: called by InitPresParams 0x825449EC
+D3DDevice_CreateSurface                0x82535128  # verified disasm: called twice by InitPresParams 0x82544A24/0x82544A60
+D3DResource_Destroy                    0x8252E7C8  # verified disasm: jump table 1..11 resource types
+D3DDevice_SetIndices                   0x82532AE0  # d3d_match 1.00: IndexBuffer +12812
+D3DDevice_SetStreamSource              0x825329C0  # d3d_match 1.00
+D3DDevice_SetRenderTarget              0x82532B78  # verified disasm: RenderTargets +12816
+D3DDevice_SetDepthStencilSurface       0x82532F08  # verified disasm: DepthStencil +12832
+D3DDevice_SetTexture                   0x825353A8  # d3d_match 1.00
+D3DDevice_SetVertexDeclaration         0x82536AF8  # d3d_match 1.00
+D3DDevice_CreateVertexDeclaration      0x82536C00  # d3d_match 1.00 (DP sub_82D9CF78)
+XGRegisterVertexShader                 0x82536830  # d3d_match 1.00 (DP sub_82D9E680)
+D3DDevice_SetVertexShader              0x82536928  # d3d_match 1.00
+XGRegisterPixelShader                  0x825365F8  # d3d_match 1.00 (DP sub_82D9CA18)
+D3DDevice_SetPixelShader               0x82536630  # d3d_match 1.00
+D3DVertexShader_Bind                   0x82543700  # d3d_match 0.97 (DP sub_82DACA68)
+D3DDevice_SetVertexShaderConstantF     0x82536380  # d3d_match 1.00: addi r4+120 (VS shadow +1920), std r11, 0(r3)
+
+[render_states_table_0x835D4A10]
+RS[ 10] D3DDevice_SetRenderState_ZEnable               set=0x82530C20 get=0x82530C58 def=0x1
+RS[ 11] D3DDevice_SetRenderState_ZFunc                 set=0x82530C90 get=0x82530CB8 def=0x3
+RS[ 12] D3DDevice_SetRenderState_ZWriteEnable          set=0x82530C60 get=0x82530C80 def=0x1
+RS[ 13] D3DDevice_SetRenderState_FillMode              set=0x82530518 get=0x82530538 def=0x0
+RS[ 14] D3DDevice_SetRenderState_CullMode              set=0x825304E8 get=0x82530508 def=0x6
+RS[ 15] D3DDevice_SetRenderState_AlphaBlendEnable      set=0x82530580 get=0x82530600 def=0x0
+RS[ 16] D3DDevice_SetRenderState_SeparateAlphaBlendEnable set=0x82530910 get=0x82530998 def=0x0
+RS[ 17] D3DDevice_SetRenderState_BlendFactor           set=0x82530A38 get=0x82530AD0 def=0xFFFFFFFF
+RS[ 18] D3DDevice_SetRenderState_SrcBlend              set=0x825306A0 get=0x82530720 def=0x1
+RS[ 19] D3DDevice_SetRenderState_DestBlend             set=0x82530730 get=0x825307B0 def=0x0
+RS[ 20] D3DDevice_SetRenderState_BlendOp               set=0x82530610 get=0x82530690 def=0x0
+RS[ 21] D3DDevice_SetRenderState_SrcBlendAlpha         set=0x82530830 get=0x82530890 def=0x1
+RS[ 22] D3DDevice_SetRenderState_DestBlendAlpha        set=0x825308A0 get=0x82530900 def=0x0
+RS[ 23] D3DDevice_SetRenderState_BlendOpAlpha          set=0x825307C0 get=0x82530820 def=0x0
+RS[ 24] D3DDevice_SetRenderState_AlphaTestEnable       set=0x82530548 get=0x82530570 def=0x0
+RS[ 25] D3DDevice_SetRenderState_AlphaRef              set=0x825309A8 get=0x825309E0 def=0x0
+RS[ 26] D3DDevice_SetRenderState_AlphaFunc             set=0x82530A08 get=0x82530A28 def=0x7
+RS[ 27] D3DDevice_SetRenderState_StencilEnable         set=0x82530CC8 get=0x82530D00 def=0x0
+RS[ 28] D3DDevice_SetRenderState_TwoSidedStencilMode   set=0x82530D08 get=0x82530D30 def=0x0
+RS[ 29] D3DDevice_SetRenderState_StencilFail           set=0x82530D70 get=0x82530D98 def=0x0
+RS[ 30] D3DDevice_SetRenderState_StencilZFail          set=0x82530DA8 get=0x82530DD0 def=0x0
+RS[ 31] D3DDevice_SetRenderState_StencilPass           set=0x82530DE0 get=0x82530E00 def=0x0
+RS[ 32] D3DDevice_SetRenderState_StencilFunc           set=0x82530D40 get=0x82530D60 def=0x7
+RS[ 33] D3DDevice_SetRenderState_StencilRef            set=0x82530EE0 get=0x82530EF8 def=0x0
+RS[ 34] D3DDevice_SetRenderState_StencilMask           set=0x82530F00 get=0x82530F18 def=0xFFFFFFFF
+RS[ 35] D3DDevice_SetRenderState_StencilWriteMask      set=0x82530F20 get=0x82530F38 def=0xFFFFFFFF
+RS[ 36] D3DDevice_SetRenderState_CCWStencilFail        set=0x82530E40 get=0x82530E68 def=0x0
+RS[ 37] D3DDevice_SetRenderState_CCWStencilZFail       set=0x82530E78 get=0x82530EA0 def=0x0
+RS[ 38] D3DDevice_SetRenderState_CCWStencilPass        set=0x82530EB0 get=0x82530ED0 def=0x0
+RS[ 39] D3DDevice_SetRenderState_CCWStencilFunc        set=0x82530E10 get=0x82530E30 def=0x7
+RS[ 40] D3DDevice_SetRenderState_CCWStencilRef         set=0x82530F40 get=0x82530F58 def=0x0
+RS[ 41] D3DDevice_SetRenderState_CCWStencilMask        set=0x82530F60 get=0x82530F78 def=0xFFFFFFFF
+RS[ 42] D3DDevice_SetRenderState_CCWStencilWriteMask   set=0x82530F80 get=0x82530F98 def=0xFFFFFFFF
+RS[ 43] D3DDevice_SetRenderState_ClipPlaneEnable       set=0x82530FA0 get=0x82530FE8 def=0x0
+RS[ 44] D3DDevice_SetRenderState_PointSize             set=0x825312E8 get=0x82531338 def=0x3F800000
+RS[ 45] D3DDevice_SetRenderState_PointSizeMin          set=0x82531348 get=0x82531390 def=0x3F800000
+RS[ 46] D3DDevice_SetRenderState_PointSpriteEnable     set=0x825312D8 get=0x825312E0 def=0x0
+RS[ 47] D3DDevice_SetRenderState_PointSizeMax          set=0x825313A0 get=0x825313E8 def=0x42800000
+RS[ 48] D3DDevice_SetRenderState_MultiSampleAntiAlias  set=0x82531188 get=0x825311A8 def=0x1
+RS[ 49] D3DDevice_SetRenderState_MultiSampleMask       set=0x825311B8 get=0x825311D0 def=0xFFFFFFFF
+RS[ 50] D3DDevice_SetRenderState_ScissorTestEnable     set=0x82530FF8 get=0x82531008 def=0x0
+RS[ 51] D3DDevice_SetRenderState_SlopeScaleDepthBias   set=0x82531010 get=0x825310B8 def=0x0
+RS[ 52] D3DDevice_SetRenderState_DepthBias             set=0x825310D8 get=0x82531178 def=0x0
+RS[ 53] D3DDevice_SetRenderState_ColorWriteEnable      set=0x825311D8 get=0x82531210 def=0xF
+RS[ 54] D3DDevice_SetRenderState_ColorWriteEnable1     set=0x82531218 get=0x82531250 def=0xF
+RS[ 55] D3DDevice_SetRenderState_ColorWriteEnable2     set=0x82531258 get=0x82531290 def=0xF
+RS[ 56] D3DDevice_SetRenderState_ColorWriteEnable3     set=0x82531298 get=0x825312D0 def=0xF
+RS[ 57] D3DDevice_SetRenderState_TessellationMode      set=0x82531A78 get=0x82531AA0 def=0x1
+RS[ 58] D3DDevice_SetRenderState_MinTessellationLevel  set=0x82531A08 get=0x82531A30 def=0x3F800000
+RS[ 59] D3DDevice_SetRenderState_MaxTessellationLevel  set=0x82531A40 get=0x82531A68 def=0x3F800000
+RS[ 60] D3DDevice_SetRenderState_Wrap0                 set=0x825313F8 get=0x82531658 def=0x0
+RS[ 61] D3DDevice_SetRenderState_Wrap1                 set=0x82531418 get=0x82531668 def=0x0
+RS[ 62] D3DDevice_SetRenderState_Wrap2                 set=0x82531440 get=0x82531678 def=0x0
+RS[ 63] D3DDevice_SetRenderState_Wrap3                 set=0x82531468 get=0x82531688 def=0x0
+RS[ 64] D3DDevice_SetRenderState_Wrap4                 set=0x82531490 get=0x82531698 def=0x0
+RS[ 65] D3DDevice_SetRenderState_Wrap5                 set=0x825314B8 get=0x825316A8 def=0x0
+RS[ 66] D3DDevice_SetRenderState_Wrap6                 set=0x825314E0 get=0x825316B8 def=0x0
+RS[ 67] D3DDevice_SetRenderState_Wrap7                 set=0x82531508 get=0x825316C8 def=0x0
+RS[ 68] D3DDevice_SetRenderState_Wrap8                 set=0x82531528 get=0x825316D8 def=0x0
+RS[ 69] D3DDevice_SetRenderState_Wrap9                 set=0x82531548 get=0x825316E8 def=0x0
+RS[ 70] D3DDevice_SetRenderState_Wrap10                set=0x82531570 get=0x825316F8 def=0x0
+RS[ 71] D3DDevice_SetRenderState_Wrap11                set=0x82531598 get=0x82531708 def=0x0
+RS[ 72] D3DDevice_SetRenderState_Wrap12                set=0x825315C0 get=0x82531718 def=0x0
+RS[ 73] D3DDevice_SetRenderState_Wrap13                set=0x825315E8 get=0x82531728 def=0x0
+RS[ 74] D3DDevice_SetRenderState_Wrap14                set=0x82531610 get=0x82531738 def=0x0
+RS[ 75] D3DDevice_SetRenderState_Wrap15                set=0x82531638 get=0x82531748 def=0x0
+RS[ 76] D3DDevice_SetRenderState_ViewportEnable        set=0x82531758 get=0x82531798 def=0x1
+RS[ 77] D3DDevice_SetRenderState_HighPrecisionBlendEnable set=0x825317A8 get=0x82531838 def=0x0
+RS[ 78] D3DDevice_SetRenderState_HighPrecisionBlendEnable1 set=0x82531840 get=0x825318D0 def=0x0
+RS[ 79] D3DDevice_SetRenderState_HighPrecisionBlendEnable2 set=0x825318D8 get=0x82531968 def=0x0
+RS[ 80] D3DDevice_SetRenderState_HighPrecisionBlendEnable3 set=0x82531970 get=0x82531A00 def=0x0
+RS[ 81] D3DDevice_SetRenderState_HalfPixelOffset       set=0x82531AB0 get=0x82531AD8 def=0x0
+RS[ 82] D3DDevice_SetRenderState_PrimitiveResetEnable  set=0x82531AE8 get=0x82531B08 def=0x0
+RS[ 83] D3DDevice_SetRenderState_PrimitiveResetIndex   set=0x82531B18 get=0x82531B38 def=0xFFFF
+RS[ 84] D3DDevice_SetRenderState_AlphaToMaskEnable     set=0x82531B40 get=0x82531B60 def=0x0
+RS[ 85] D3DDevice_SetRenderState_AlphaToMaskOffsets    set=0x82531B70 get=0x82531B90 def=0x87
+RS[ 86] D3DDevice_SetRenderState_GuardBand_X           set=0x82531B98 get=0x82531BC0 def=0x40000000
+RS[ 87] D3DDevice_SetRenderState_GuardBand_Y           set=0x82531BC8 get=0x82531BF0 def=0x40000000
+RS[ 88] D3DDevice_SetRenderState_DiscardBand_X         set=0x82531BF8 get=0x82531C18 def=0x3F800000
+RS[ 89] D3DDevice_SetRenderState_DiscardBand_Y         set=0x82531C20 get=0x82531C48 def=0x3F800000
+RS[ 90] D3DDevice_SetRenderState_HiStencilEnable       set=0x82531CE8 get=0x82531D08 def=0x0
+RS[ 91] D3DDevice_SetRenderState_HiStencilWriteEnable  set=0x82531D18 get=0x82531D38 def=0x0
+RS[ 92] D3DDevice_SetRenderState_HiStencilFunc         set=0x82531D48 get=0x82531D68 def=0x0
+RS[ 93] D3DDevice_SetRenderState_HiStencilRef          set=0x82531D78 get=0x82531D90 def=0x0
+RS[ 94] D3DDevice_SetRenderState_PresentInterval       set=0x82531D98 get=0x82531DA0 def=0x0
+RS[ 95] D3DDevice_SetRenderState_PresentImmediateThreshold set=0x82531DA8 get=0x82531DB8 def=0x0
+RS[ 96] D3DDevice_SetRenderState_HiZEnable             set=0x82531C50 get=0x82531C70 def=0x2
+RS[ 97] D3DDevice_SetRenderState_HiZWriteEnable        set=0x82531C80 get=0x82531CD8 def=0x2
+RS[ 98] D3DDevice_SetRenderState_LastPixel             set=0x82530B40 get=0x82530B68 def=0x1
+RS[ 99] D3DDevice_SetRenderState_LineWidth             set=0x82530B78 get=0x82530BB8 def=0x3F800000
+RS[100] D3DDevice_SetRenderState_Buffer2Frames         set=0x82530BF0 get=0x82530C10 def=0x1
+
+[sampler_states_table_0x835D4ED0]
+SS[ 0]  D3DDevice_SetSamplerState_AddressU             set=0x82532548 get=0x82532580 def=0x0
+SS[ 1]  D3DDevice_SetSamplerState_AddressV             set=0x82532598 get=0x825325D0 def=0x0
+SS[ 2]  D3DDevice_SetSamplerState_AddressW             set=0x825325E8 get=0x82532620 def=0x0
+SS[ 3]  D3DDevice_SetSamplerState_BorderColor          set=0x825324D8 get=0x82532520 def=0x0
+SS[ 4]  D3DDevice_SetSamplerState_MagFilter            set=0x82531F70 get=0x82532038 def=0x0
+SS[ 5]  D3DDevice_SetSamplerState_MinFilter            set=0x82531DC8 get=0x82531E90 def=0x0
+SS[ 6]  D3DDevice_SetSamplerState_MipFilter            set=0x82532110 get=0x82532150 def=0x2
+SS[ 7]  D3DDevice_SetSamplerState_MipMapLodBias        set=0x82532330 get=0x82532390 def=0x0
+SS[ 8]  D3DDevice_SetSamplerState_MaxMipLevel          set=0x825323D8 get=0x82532448 def=0x0
+SS[ 9]  D3DDevice_SetSamplerState_MaxAnisotropy        set=0x82532210 get=0x82532278 def=0x1
+SS[10]  D3DDevice_SetSamplerState_MagFilterZ           set=0x82532070 get=0x82532100 def=0x0
+SS[11]  D3DDevice_SetSamplerState_MinFilterZ           set=0x82531EC8 get=0x82531F60 def=0x0
+SS[12]  D3DDevice_SetSamplerState_SeparateZFilterEnable set=0x82532168 get=0x82532200 def=0x0
+SS[13]  D3DDevice_SetSamplerState_MinMipLevel          set=0x82532458 get=0x825324C8 def=0xD
+SS[14]  D3DDevice_SetSamplerState_TrilinearThreshold   set=0x82532638 get=0x82532678 def=0x0
+SS[15]  D3DDevice_SetSamplerState_AnisotropyBias       set=0x82532288 get=0x825322E8 def=0x0
+SS[16]  D3DDevice_SetSamplerState_HGradientExpBias     set=0x82532690 get=0x825326D0 def=0x0
+SS[17]  D3DDevice_SetSamplerState_VGradientExpBias     set=0x825326E8 get=0x82532728 def=0x0
+SS[18]  D3DDevice_SetSamplerState_WhiteBorderColorW    set=0x82532740 get=0x82532780 def=0x0
+SS[19]  D3DDevice_SetSamplerState_PointBorderEnable    set=0x82532798 get=0x825327E0 def=0x1
