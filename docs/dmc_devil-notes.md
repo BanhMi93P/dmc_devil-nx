@@ -35,6 +35,14 @@
   - `deko3d_glsl.bin`: `111,928,528` bytes (`106.74 MiB`), `BDKG` v1, `35,734 / 35,734` shaders (`0` `.spv` failures), `131,072` B zstd dictionary (round-trip verified).
   - Tooling/Switch fixes: `BANJO_DEKO3D_ONLY=1` (`XenosRecomp/main.cpp`), parallel `deko3d_glsl_opt.py`, in-memory `zstandard` in `deko3d_shader_package.py`, optional `REX_HAS_OPUS` (`libopus`), `memalign` / `_flockfile` newlib fixes, `rectangle_list_gs.hlsl` `EMIT_RECTANGLE` for `uam`, and `patch_nacp_utf8.py` for UTF-8 NACP on Windows.
 
+## Switch Runtime Fixes
+- **`DMC-07` — Startup TLS exception crash (`TimerThreadMain`, `std::uncaught_exception` / `__cxa_get_globals`):**
+  - Cause: libnx `threadTlsGet()` read unzeroed TLS slots at `tpidrro_el0 + 0x108` (`far 0xffffffdb6908489d`).
+  - Fix: Ported `RexSwitchSanitizeThreadTls()` (`sdk/src/core/threading_switch.cpp`) + linker `--wrap` overrides for `__cxa_get_globals`, `__cxa_get_globals_fast`, `std::uncaught_exception`, and `std::uncaught_exceptions` backed by `thread_local s_rex_eh_globals` (`sdk/src/ui/switch_perf.cpp`, `sdk/cmake/rexglue_switch.cmake`).
+- **`DMC-08` — Black-screen 100% CPU spin-hang (`Main XThread` + `XThreadAF70CD00` after second `Guest D3D device` at `0x4000db80`):**
+  - Cause: Both `default.xex` (`0x831EF598`) and static-linked `NTJobCode.xex` (`0x8801B308`) define `xstart` plus 198 `__savegprlr_*` / `__restgprlr_*` / `__savevmx_*` / `__restvmx_*` helpers (with mismatched `skip_lr` ABI). Linking `librenut_NTJobCode.a` with `-Wl,--allow-multiple-definition` silently discarded `NTJobCode`'s `xstart` and bound `0x8801B308` to `default.xex`'s `xstart`, recursively re-running game startup when `NTJobCode.xex`'s `DllMain` executed.
+  - Fix: Added `app/src/ntjobcode_switch_symbols.h` (force-included via `-include` on `renut_NTJobCode` for Switch in `app/CMakeLists.txt`) renaming `xstart` and all save/restore helpers with a `_NTJobCode` suffix via 2-level `DECLARE_REX_FUNC` / `DEFINE_REX_FUNC` macro expansion. Also added Deadpool's proven UE3 ARM64 safety defaults to `app/katamari_switch_defaults.toml` (`blur_guest_cas_relaxed = false`, `blur_guest_fences_split = false`, `kernel_scatter_read_offset_zero = true`).
+
 ## Update & DLC (Deferred / TODO)
 - **Do NOT copy `game/` into `output/dmc_devil/`:** User keeps extracted Base `game/` directly on the Switch SD card (`sdmc:/switch/dmc_devil/game/`).
 - **Title Update (`Update/TU_11K6214_000000S000000.0000000000087`, `3.03 MB`, STFS `LIVE`, `ctype=0xB0000`):**

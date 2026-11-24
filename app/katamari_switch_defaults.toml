@@ -17,6 +17,11 @@ banjo_renut_keep_unused_targets = false
 blur_renut_texture_pool = false
 banjo_renut_stream_redeem = false
 
+# ARM64 memory-ordering & IO safety (UE3 on Cortex-A57)
+blur_guest_cas_relaxed = false
+blur_guest_fences_split = false
+kernel_scatter_read_offset_zero = true
+
 # Latency, pacing & allocator safety
 banjo_async_present = false
 blur_small_alloc_mb = 0
