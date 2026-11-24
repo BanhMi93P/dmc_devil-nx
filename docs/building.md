@@ -180,8 +180,8 @@ on the Switch, the system's on a PC).
 [media-compression.md](media-compression.md) (sasrt-nx's, 2026-11-23) is the guide to making these files, from twelve
 ports: the method, LZ4 or ZXC for each kind of file, H.265 container by container (CRI SFD and USM, ASF with WMV3 or
 VC-1, Bink 1), Opus from each audio format met (raw PCM, RIFF XMA1 / XMA2, Wwise, XACT, Blur's `.baf`, CRI ADX), every
-port's results, the traps, and what the base still lacks (its section 9: the VFS index keeps one size per file, so a
-game folder with any of these files is scanned again at every start).
+port's results, the traps, and what the base still lacks (its section 9). Since port 264 the VFS index keeps a
+stand-in's SD size, so a game folder with these files is scanned only at the first start after an install.
 
 The older page, [katamari-nx-installer](https://github.com/ChanseyIsTheBest/katamari-nx-installer) makes the same `deko3d_glsl.bin` in the
 browser. For a new release:

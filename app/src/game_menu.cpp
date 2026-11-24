@@ -409,7 +409,15 @@ std::vector<Setting> MakeSettings(const std::string& file) {
       TrDD(H_DYN_DOCKED, lines("banjo_renut_dynamic_docked_low"), lines("banjo_renut_dynamic_docked_high")));
   add(T_RUMBLE, "input_rumble", false, on_off(), 0, Tr(H_RUMBLE), /*always_in_file=*/false);
   add(T_SMAA, "banjo_renut_smaa", false, on_off(), 0, Tr(H_SMAA));
-  add(T_MSAA, "msaa_level", false, {C(Tr(C_OFF), "1", "1"), C("2x", "2", "2"), C("4x", "4", "4")}, 0, Tr(H_MSAA));
+  // katamari-nx (2026-11-24, the user: "Make sure 4xmsaa is on by default"): Katamari's default is 4x (its toml and
+  // built-in settings), so the menu's reset gives 4x there; the base's default stays off (port 118).
+#if defined(KATAMARI_BUILTIN_CONFIG)
+  constexpr int kMsaaDefault = 2;
+#else
+  constexpr int kMsaaDefault = 0;
+#endif
+  add(T_MSAA, "msaa_level", false, {C(Tr(C_OFF), "1", "1"), C("2x", "2", "2"), C("4x", "4", "4")}, kMsaaDefault,
+      Tr(H_MSAA));
   // blur-nx (2026-11-18, the user: "make 4 core mode an option ... on by default and a warning that it is highly
   // reccomended to be left on").
   add(T_FOURCORE, "four_core_mode", true, on_off(), 0, Tr(H_FOURCORE));

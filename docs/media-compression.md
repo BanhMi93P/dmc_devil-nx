@@ -133,10 +133,13 @@ decoder hook tells H.265 from WMV by the first frame.
   size it stands for.
   - culdcept-nx's index (its own version 2, `kNotPacked`), nights-nx's copy of it, and futari-nx's version 3 do. With
     it, Culdcept's later starts take 237 ms.
-  - **The base's index does not** (2026-11-23). Its version 2 means "children in AnswerRank's order". It keeps one
-    size per file, the size the game sees (`host_path_index.cpp` SerializeDirectory), and ValidateDirectory compares
-    that with the SD listing's size. So a folder with any stand-in never validates, and **every start does the full
-    scan**. sasrt-nx, rr6-nx, blur-nx, vivapinata-nx, sa2-nx-ult and kameo-nx have the same index. Fix: section 9.
+  - **The base's index did not until port 264** (2026-11-23). Its version 2 ("children in AnswerRank's order") kept
+    one size per file, the size the game sees, and ValidateDirectory compared that with the SD listing's size, so a
+    folder with any stand-in never validated and **every start did the full scan**. sasrt-nx, rr6-nx, blur-nx,
+    vivapinata-nx, sa2-nx-ult and kameo-nx have that index until they take port 264.
+  - **Port 264's version 4** keeps each file's SD size and, for a stand-in, its kinds, the size it stands for and the
+    game's name for it, for every kind of port 259. In Ryujinx, Katamari's start from the index took 309.8 ms, against
+    13.8 s for the scan.
 - **Stand-ins are read-only.** Open refuses writes, and OpenMapped refuses.
 
 ---
@@ -865,7 +868,7 @@ proven hook instead, which applied unchanged.
 16. **The PC has no libopus** unless `libopus-0.dll` is beside it: silent Opus sounds there are expected.
 17. **The Claude app's built-in browser refuses nested workers:** test the pages in Chrome or Edge.
 18. **A full scan reads every stand-in's header** (tens of seconds on the console). With culdcept-nx's two-size VFS
-    index only the first start after an install scans. With the base's index today, every start does (section 3).
+    index, or the base's since port 264, only the first start after an install scans (section 3).
 19. **Sizes:** say whether MB or MiB. SA2's "1,222 MB" zip was 1,166 MiB.
 
 ---
@@ -881,18 +884,13 @@ proven hook instead, which applied unchanged.
   - the merged lookup and VFS index version 2;
   - `rexopus`, `renut_nxvideo`;
   - `tools/zxcb_pack.cpp`, and rr6-nx's `tools/test_lz4_blocks.cpp` (both versions).
+- **Port 264:** the VFS index's version 4, culdcept-nx's two sizes for every stand-in kind (added after this guide was
+  written).
 
 The movie hooks are each game's, and stay in the ports.
 
 **Not in the base yet:**
 
-- **The VFS index's two sizes, the most useful item here.** culdcept-nx's `sdk/src/filesystem/devices/host_path_index.cpp`
-  (its version 2: each file's size on the SD and, for a stand-in, the size it holds; `kNotPacked` for a plain file).
-  nights-nx has the same.
-  - Without it, a game folder with any stand-in fails validation and is scanned on every start (section 3).
-  - The base's index needs a version above its own 2 for it, so old indexes are made again.
-  - Culdcept's comment names `.lz4b`; its later starts with `.xmo` files took 237 ms. Check that every stand-in kind
-    (`.hevc`, `.opcm`, `.xmop`, their `.lz4b` forms) records both sizes.
 - **`NAME.adxo`** (sa2-nx-ult's `sdk/include/rex/filesystem/adx_opus.h`, `sdk/src/filesystem/adx_opus.cpp`, and its
   lookup in `host_path_*`; nights-nx has the same). The hook is per game (`sa2_adx_opus.cpp`, `nights_adx_opus.cpp`).
   Two ports use it, so it is a candidate for the base.

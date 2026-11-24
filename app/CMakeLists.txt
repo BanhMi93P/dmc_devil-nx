@@ -236,6 +236,9 @@ set(RENUT_SOURCES
     src/cpu/blur_microbench.cpp
     # katamari-nx (2026-11-01): diagnostic of the game state's stage fields (katamari_diag_game_state, off).
     src/cpu/katamari_stage_diag.cpp
+    # renut-ultimate (2026-11-23): the movies (data/movie/*.wmv) by FFmpeg's WMV3 decoder, or nxvideo (NVDEC) when the
+    # installer re-encoded them to H.265: vivapinata-nx's / banjo-nx's / culdcept-nx's hook at Katamari's addresses.
+    src/cpu/katamari_wmv_ffmpeg.cpp
     # katamari-nx: the native copies of hot game functions (banjo_hot_guest.cpp and its shards), from this game's PC
     # profile (docs/katamari-notes.md, "Hot functions"): src/cpu/hot/localized.txt and hand.txt.
     src/cpu/banjo_hot_guest.cpp
@@ -937,6 +940,12 @@ foreach(_dep imgui xxhash renderdoc)
     endif()
 endforeach()
 
+# renut-ultimate (2026-11-23; vivapinata-nx's / banjo-nx's / culdcept-nx's block, credit them): src/cpu/katamari_wmv_ffmpeg.cpp
+# calls FFmpeg's WMV3 decoder itself (sdk/thirdparty/FFmpeg/config.h switches it on: config_masseffect_wmv3.h).
+if(TARGET libavcodec)
+    target_link_libraries(renut PRIVATE libavcodec libavutil)
+endif()
+
 # Base port 259 (rr6-nx / sasrt-nx, 2026-11-21; culdcept-nx's nxvideo): the H.265 movies' decoder on the Switch's NVDEC,
 # tools/switch/nxvideo: devkitPro's switch-ffmpeg 7.1 (built with averne's nvtegra backend) linked with the shim into one
 # object whose only global symbols are nxv_*, so FFmpeg 7.1's names never meet the SDK's FFmpeg (the XMA audio). Made
@@ -1002,10 +1011,12 @@ if(REXGLUE_PLATFORM_SWITCH)
     endif()
     # katamari-nx (2026-11-02, the user's request): author ChanseyIsTheBest, the user's icon (the cover art).
     # 2026-11-05: version 1.0.1, the game's memory and the NRO's code on 2 MB blocks, and the boot's cvars.
+    # 2026-11-24 (the user: "make nro 1.0.2"): version 1.0.2, the H.265 / Opus / LZ4-ZXC media, the installer's VFS
+    # index, the DLC read in place and the collection screen's tile fix.
     rexglue_switch_add_nro(renut
         NAME "${RENUT_GAME_NAME}"  # port 193: set once, above
         AUTHOR "ChanseyIsTheBest"
-        VERSION "1.0.1"
+        VERSION "1.0.2"
         ${RENUT_ICON_ARG})
 endif()
 

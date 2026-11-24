@@ -30,3 +30,8 @@
 #else
 #error "no config"
 #endif
+
+/* renut-ultimate (2026-11-23, Katamari's movies: app/src/cpu/katamari_wmv_ffmpeg.cpp): the fork addition's WMV3 /
+   VC-1 decoders (config_masseffect_wmv3.h), whose sources sdk/thirdparty/CMakeLists.txt always compiled; culdcept-nx,
+   banjo-nx, vivapinata-nx and nights-nx include it here the same way. */
+#include "config_masseffect_wmv3.h"

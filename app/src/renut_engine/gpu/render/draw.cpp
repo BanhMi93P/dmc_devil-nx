@@ -100,6 +100,17 @@ REXCVAR_DEFINE_INT32(banjo_renut_diag_draw_log_until_s, 0, "Banjo/Renut",
                      "up to this second (0 = the two frames only); clears are logged with the draws");
 REXCVAR_DEFINE_INT32(banjo_renut_diag_draw_log_every, 6, "Banjo/Renut",
                      "Diagnostic: the draw log's window takes one frame in this many");
+// katamari-nx (2026-11-24): ComputeViewportSlow's tile rule (the collection screen's columns 2 and 4).
+REXCVAR_DEFINE_BOOL(banjo_renut_tile_screen_viewports, true, "Banjo/Renut",
+                    "Renut's renderer, predicated tiling: a draw predicated to one tile whose viewport overlaps that "
+                    "tile's screen rect keeps its screen coordinates (as the GPU's per-tile window offset does); off, "
+                    "every one-tile draw smaller than the target is moved by its tile's corner (N&B's per-tile command "
+                    "buffers), which put Katamari's collection objects of columns 2 and 4 off their cells");
+// katamari-nx (2026-11-24, the collection screen's columns 2 and 4): the tiles set and the draws taken as one tile's.
+REXCVAR_DEFINE_INT32(katamari_diag_tiles, 0, "Katamari/Debug",
+                     "Diagnostic: log this many tile sets (BeginTiling's rects) and draws PredicatedTile takes as one "
+                     "tile's ([tilelog]; 0 = off)");
+
 REXCVAR_DEFINE_STRING(banjo_renut_diag_blend_skip_exclude, "", "Banjo/Renut",
                       "Diagnostic: pixel shader hashes (hex, comma separated) banjo_gpu_blend_skip leaves alone");
 
@@ -2954,6 +2965,16 @@ bool PredicatedTile(const GuestDevice &device, ClearRect &rect) {
   if (tile < 0)
     return false;
   rect = g_tiles[tile];
+  static int32_t left = REXCVAR_GET(katamari_diag_tiles) * 8;
+  if (left > 0 && float(device.dev().m_ValuesPacket.VportXScale) < 100.0f) [[unlikely]] {  // small viewports only
+    --left;
+    const d3d::ValuesPacket &v = device.dev().m_ValuesPacket;
+    RGPU_INFO("[tilelog] one-tile draw: device predication {:08X} replay {:08X} -> tile {} of {} ({},{} - {},{}); vport "
+              "x {} + {} y {} + {}",
+              device.U32(d3d::kDeviceOffsetPredication), g_replay_predication, tile, g_tiles.size(), rect.x1, rect.y1,
+              rect.x2, rect.y2, float(v.VportXScale), float(v.VportXOffset), float(v.VportYScale),
+              float(v.VportYOffset));
+  }
   return true;
 }
 
@@ -3067,7 +3088,25 @@ ViewportState ComputeViewportSlow(const GuestDevice &device, const Targets &t) {
   const bool screen_wide = one_tile && (vte & 0x0F) == 0x0F && t.guest_width && t.guest_height &&
                            (2.0f * xs > float(t.guest_width) + 0.5f ||
                             -2.0f * ys > float(t.guest_height) + 0.5f);
-  const bool tile_local = one_tile && !screen_wide;
+  // katamari-nx (2026-11-24, the collection screen: the objects of columns 2 and 4 missing, before CG-13 too;
+  // banjo_renut_tile_screen_viewports): the GPU replays a tiled frame once per tile with the window offset at minus the
+  // tile's corner, so a draw's viewport is in screen coordinates whichever tiles it is predicated to. Katamari draws each
+  // collection object with its own 100x100 viewport (sub_824DE730) while tiling in four 320-wide strips; D3D predicates
+  // the ones inside one strip (columns 2 and 4) to that strip, and the tile-local rule below added the strip's corner
+  // again: column 2 at x 754 instead of 434 and column 4 at 1384 instead of 744, their scissors cut to nothing by the
+  // strip (columns 1, 3 and 5 cross a strip's edge: predicated to two tiles, drawn). A viewport that overlaps its tile's
+  // own rect is in screen coordinates; one in the tile's coordinates (N&B's per-tile command buffers, 0 to the tile's
+  // size) cannot overlap the rect of a tile away from the origin (whose corner is at least the tile's size), and at the
+  // origin the two are the same.
+  static const bool screen_viewports = REXCVAR_GET(banjo_renut_tile_screen_viewports);
+  bool screen_coords = false;
+  if (one_tile && !screen_wide && screen_viewports && (tile_rect.x1 || tile_rect.y1) && (vte & 0x0F) == 0x0F) {
+    const float vx1 = xo - std::fabs(xs), vx2 = xo + std::fabs(xs);
+    const float vy1 = yo - std::fabs(ys), vy2 = yo + std::fabs(ys);
+    screen_coords = vx1 < float(tile_rect.x2) && vx2 > float(tile_rect.x1) && vy1 < float(tile_rect.y2) &&
+                    vy2 > float(tile_rect.y1);
+  }
+  const bool tile_local = one_tile && !screen_wide && !screen_coords;
   int32_t tx = 0, ty = 0;
   if (tile_local) {
     tx = tile_rect.x1;
@@ -10170,6 +10209,14 @@ void SasrtWarnStencilOnD32f(const HostSurface *d, bool clear = false, bool first
 }
 
 void SetTilesLocked(const ClearRect *rects, u32 count) {
+  static int32_t left = REXCVAR_GET(katamari_diag_tiles);
+  if (left > 0 && count) [[unlikely]] {
+    --left;
+    std::string line;
+    for (u32 i = 0; i < count && rects; ++i)
+      line += fmt::format(" ({},{} - {},{})", rects[i].x1, rects[i].y1, rects[i].x2, rects[i].y2);
+    RGPU_INFO("[tilelog] tiles {}:{}", count, line);
+  }
   g_tiles.assign(rects, rects + (rects ? count : 0));
 }
 

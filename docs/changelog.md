@@ -388,3 +388,11 @@ Ports 1-43 are the first round: the universal fixes of the other ports' renderer
 - Port 262 (from the Cave ports): the handheld GPU boost (RexSwitchApmApply) changes nothing when the clocks read 0
   (Ryujinx: the SDK overlays drawn after it stayed invisible).
 - Port 263: sasrt_gpu_seed_cpu_direct off by default (banjo-nx's vertex explosions with it on).
+- Port 264 (culdcept-nx's two-size VFS index, for every kind): the index keeps a stand-in's SD size, so a game
+  folder with .lz4b / .hevc / .opcm / .xmo / .xmop files is no longer scanned again at every start.
+- Port 265 (rr6-nx's): downloadable content read in place from its packages, no longer unpacked at the first start.
+- Port 266: a VFS index made by the web installer is taken from a renamed folder and always validated, so the first
+  start skips the full scan.
+- Port 267 (Katamari): the movies by FFmpeg's WMV3 decoder, or by NVDEC once the installer re-encoded them to H.265.
+- Port 268: predicated tiling: a draw predicated to one tile keeps its screen viewport (Katamari's collection
+  screen, columns 2 and 4).

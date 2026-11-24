@@ -8,6 +8,9 @@ gpu_allow_invalid_fetch_constants = true
 readback_memexport = false
 readback_memexport_fast = false
 disable_msaa = false
+# 2026-11-24 (the user: "Make sure 4xmsaa is on by default"): the game's own 4x MSAA; the base's msaa_level is 1
+# (port 118). The player's katamari.toml (app/katamari_switch.toml) writes 4 too and overrides this.
+msaa_level = 4
 banjo_shader_misses = ""
 log_level = "off"
 log_file_writer = false
