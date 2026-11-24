@@ -55,5 +55,5 @@ if (XENOS_RECOMP_DXIL)
 endif()
 
 if (XENOS_RECOMP_RENUT)
-    target_compile_definitions(XenosRecomp PRIVATE RENUT_RECOMP)
+    target_compile_definitions(XenosRecomp PRIVATE RENUT_RECOMP RENUT_VERTEX_INPUTS_MORPH)
 endif()

@@ -847,7 +847,7 @@ void BindConstantSet(plume::RenderCommandList *cmd, uint32_t set_index, plume::R
 // under its lock per draw): draws in a row mostly use the same one. Cleared
 // when a declaration goes (ForgetVertexDeclarationLocked).
 u32 g_last_declaration_va = 0;
-VertexDeclarationRecord *g_last_declaration = nullptr;
+const VertexDeclarationRecord *g_last_declaration = nullptr;
 
 bool SameReference(const plume::RenderBufferReference &a, const plume::RenderBufferReference &b) {
   return a.ref == b.ref && a.offset == b.offset;
@@ -9772,7 +9772,7 @@ VertexDeclarationRecord &NoDeclaration() {
 // Its D3DVERTEXELEMENT9s (12 bytes each, ended by D3DDECL_END) are at +52 of the declaration, inside the device
 // snapshot, so a draw reads them from its own snapshot; at most 15 before the device's next field (+0x3088). One record
 // per distinct element list; each new list is logged once with its elements, to check the layout.
-constexpr u32 kDeviceDeclarationOffset = 0x2F98;
+constexpr u32 kDeviceDeclarationOffset = 0x3118;
 constexpr u32 kDeclarationElementsOffset = 52;
 constexpr u32 kDeviceDeclarationMaxElements = 15;
 // culdcept-nx (2026-11-19): draw.h's field map counts these bytes as the declaration (FieldOfOffset).
@@ -11473,6 +11473,8 @@ int FastDrawLocked(const u8 *device_state, const DrawCall &call, const ReplayCon
     if (declaration_va) {
       if (declaration_va != g_last_declaration_va) {
         g_last_declaration = FindRecord<VertexDeclarationRecord>(declaration_va, RecordKind::VertexDeclaration);
+        if (!g_last_declaration)
+          g_last_declaration = FindGuestDeclarationLocked(declaration_va);
         g_last_declaration_va = g_last_declaration ? declaration_va : 0;
       }
       declaration = g_last_declaration_va == declaration_va ? g_last_declaration : nullptr;
@@ -13372,6 +13374,8 @@ bool DrawStateLocked(const u8 *device_state, const DrawCall &call, const ReplayC
     if (declaration_va != g_last_declaration_va) {
       g_last_declaration =
           FindRecord<VertexDeclarationRecord>(declaration_va, RecordKind::VertexDeclaration);
+      if (!g_last_declaration)
+        g_last_declaration = FindGuestDeclarationLocked(declaration_va);
       g_last_declaration_va = g_last_declaration ? declaration_va : 0;
     }
     declaration = g_last_declaration_va == declaration_va ? g_last_declaration : nullptr;
@@ -16456,7 +16460,7 @@ void SyncColorViewLocked(HostSurface *surface) {
   ColorAliasesLocked(surface, aliases);
   HostSurface *latest = nullptr;
   for (HostSurface *alias : aliases) {
-    if (alias->bound_serial > surface->bound_serial && (!latest || alias->bound_serial > latest->bound_serial))
+    if (alias->write_seq > surface->write_seq && (!latest || alias->write_seq > latest->write_seq))
       latest = alias;
   }
   if (!latest || (surface->synced_view == latest && surface->synced_writes == latest->writes))
@@ -16804,6 +16808,11 @@ void DepthHandOverForgetLocked(HostTexture &d) {
   }
 }
 
+void MaterialiseHandOverLocked(HostTexture &dest) {
+  if (dest.handed_from || dest.held_current)
+    MaterialiseLocked(dest, false);
+}
+
 void DepthHandOverBeforeRetireLocked(HostSurface *surface) {
   if (!surface || !surface->handed)
     return;
@@ -17085,11 +17094,12 @@ void ResolveTargetsLocked(const u32 *targets, u32 flags, const ClearRect *source
       if (fits && banjo::renut_gpu::ResolveSkipOn() && dest->resolve_signature == sig) {
         // banjo-nx (2026-10-19, banjo_renut_resolve_skip): the same resolve of an unchanged source is in dest already.
         banjo::renut_gpu::CountSkippedResolve(false);
-      } else if (fits && slice == 0 && z == 0 && dest_level == 0 && exp_bias == 0 &&
+      } else if (fits && slice == 0 && z == 0 && dest_level == 0 && exp_bias == 0 && !dest->has_stacked_alias &&
                  HandOverResolveLocked(surface, dest, src, dest_x, dest_y, false)) {
         // kameo-nx (2026-11-03, banjo_deko3d_color_handover): left in the target's image; the target stays bound
         // (banjo_deko3d_resolve_keeps_target): nothing was drawn and no target changed.
         dest->resolve_signature = sig;
+        NoteColorResolveWrittenLocked(*dest);
         if (!banjo::renut_gpu::ResolveKeepsTargetOn())
           g_bound.framebuffer = nullptr;
       } else if (fits) {
@@ -17301,6 +17311,7 @@ void ResolveTargetsLocked(const u32 *targets, u32 flags, const ClearRect *source
               host_y, z, &box);
         }
         TransitionTextureLocked(dest, plume::RenderTextureLayout::SHADER_READ);
+        NoteColorResolveWrittenLocked(*dest);
         detail::QueueResolveReadbackLocked(s, dest, slice, z, dest_level);  // sasrt-nx (2026-10-30)
         if (dest->extra_levels && LazyResolveMipsOn()) {
           // banjo-nx (2026-10-28, banjo_renut_lazy_resolve_mips; from sa2-nx): made where they are read

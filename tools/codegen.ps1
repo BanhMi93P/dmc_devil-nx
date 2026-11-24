@@ -8,10 +8,13 @@ if (-not $Rexglue) { $Rexglue = Join-Path $root "sdk\out\win-amd64\rexglue.exe" 
 if (-not $Log) { $Log = Join-Path $root "out\codegen.log" }
 $env:REXGLUE_DUMP_IMAGE = Join-Path $root "out\renut_image.bin"
 Push-Location (Join-Path $root "app")
+$prevErrPref = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
 try {
     & $Rexglue codegen renut_manifest.toml *> $Log
     $code = $LASTEXITCODE
 } finally {
+    $ErrorActionPreference = $prevErrPref
     Pop-Location
 }
 Get-Content $Log -Tail 4

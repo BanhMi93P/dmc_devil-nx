@@ -412,6 +412,54 @@ void ReleaseGuestShaderLocked(u32 shader_va) {
   ForgetShader(shader_va);
 }
 
+namespace {
+std::unordered_map<u32, std::unique_ptr<VertexDeclarationRecord>> g_guest_declarations;
+}  // namespace
+
+const VertexDeclarationRecord *FindGuestDeclarationLocked(u32 declaration_va) {
+  if (!declaration_va)
+    return nullptr;
+  auto it = g_guest_declarations.find(declaration_va);
+  if (it != g_guest_declarations.end())
+    return it->second.get();
+
+  // On-the-fly decode of guest D3DVertexDeclaration object (e.g. internal device declarations)
+  const auto *words = GuestPtr<const be_u32>(declaration_va);
+  if (!words || (u32(words[0]) & 0x1F) != u32(d3d::ResourceType::VertexDeclaration))
+    return nullptr;
+
+  const u32 count = u32(words[24 / 4]);
+  const auto *elements = GuestPtr<const GuestVertexElement>(declaration_va + 52);
+  if (!elements)
+    return nullptr;
+
+  auto declaration = std::make_unique<VertexDeclarationRecord>();
+  declaration->x360.resource.Common = u32(d3d::ResourceType::VertexDeclaration);
+  declaration->self_va = declaration_va;
+  const u32 limit = count ? std::min<u32>(count, 64) : 64;
+  for (u32 i = 0; i < limit; ++i) {
+    if (u32(elements[i].Stream) == 0xFF || u32(elements[i].Type) == kDeclTypeUnused)
+      break;
+    declaration->elements.push_back(elements[i]);
+  }
+  if (declaration->elements.empty())
+    return nullptr;
+
+  BuildDeclarationLayout(*declaration);
+  const auto *ptr = declaration.get();
+  g_guest_declarations[declaration_va] = std::move(declaration);
+  return ptr;
+}
+
+void ReleaseGuestDeclarationLocked(u32 declaration_va) {
+  auto it = g_guest_declarations.find(declaration_va);
+  if (it == g_guest_declarations.end())
+    return;
+  InvalidateFastDrawForRecordLocked(it->second.get());
+  g_guest_declarations.erase(it);
+  ForgetVertexDeclarationLocked(declaration_va);
+}
+
 void BuildDeclarationLayout(VertexDeclarationRecord &declaration) {
   declaration.layout =
       BuildHostVertexLayout(declaration.elements.data(), u32(declaration.elements.size()));
@@ -1014,9 +1062,96 @@ void D3DVertexShader_Bind_hook(u32 shader_va, u32 declaration_va, mapped_u32 str
 
 } // namespace
 
+#if 0  // katamari-nx hooks disabled for DmC
 BANJO_RENUT_HOOK(sub_824D6120, D3DDevice_CreateVertexShader_hook);  // D3DDevice_CreateVertexShader  // katamari-nx: N&B sub_826377C0, signature 0.85 (next 0.55)
 BANJO_RENUT_HOOK(sub_824D6010, D3DDevice_CreatePixelShader_hook);  // D3DDevice_CreatePixelShader  // katamari-nx: N&B sub_826375D8, D3DDevice_CreatePixelShader: CreateVertexShader takes sub_824D6120 (0.85); this one's next best, 0.66
 BANJO_RENUT_HOOK(sub_824D4C50, D3DDevice_CreateVertexDeclaration_hook);  // D3DDevice_CreateVertexDeclaration  // katamari-nx: N&B sub_826379A0, signature 0.77 (next 0.47)
 BANJO_RENUT_UNHOOKED_HOOK(sub_8263FBD0, D3DVertexShader_Bind_hook);  // D3DVertexShader_Bind  // katamari-nx: not hooked (D3DVertexShader_Bind: no clear counterpart (sig 0.35/0.28))
 BANJO_RENUT_HOOK(sub_824D4838, XGRegisterVertexShader_hook);  // XGRegisterVertexShader  // katamari-nx: N&B sub_826376C8, signature 0.91 (next 0.32)
 BANJO_RENUT_UNHOOKED_HOOK(sub_826375A0, XGRegisterPixelShader_hook);  // XGRegisterPixelShader  // katamari-nx: not hooked (XGRegisterPixelShader: no counterpart (sig 0.26))
+#endif
+
+// ---------------------------------------------------------------------------
+// DmC shader & vertex declaration hooks (XDK 21119)
+// ---------------------------------------------------------------------------
+
+namespace {
+
+void RegisterGuestDeclaration(u32 declaration_va, const GuestVertexElement *elements) {
+  auto declaration = std::make_shared<VertexDeclarationRecord>();
+  declaration->x360.resource.Common = u32(d3d::ResourceType::VertexDeclaration);
+  declaration->self_va = declaration_va;
+  for (u32 i = 0; i < 64 && u32(elements[i].Stream) != 0xFF && u32(elements[i].Type) != kDeclTypeUnused; ++i)
+    declaration->elements.push_back(elements[i]);
+  BuildDeclarationLayout(*declaration);
+  render_thread::Queue([declaration_va, declaration] {
+    ReleaseGuestDeclarationLocked(declaration_va);
+    g_guest_declarations[declaration_va] = std::make_unique<VertexDeclarationRecord>(*declaration);
+  });
+}
+
+}  // namespace
+
+// void XGRegisterVertexShader(D3DVertexShader*, void *pPhysicalPart) [sub_82536830]
+DMC_RENUT_HOOK_RAW(sub_82536830) {
+  const u32 shader = ctx.r3.u32, physical = ctx.r4.u32;
+  __imp__sub_82536830(ctx, base);
+  RegisterGuestShader(shader, physical, false);
+}
+
+// void XGRegisterPixelShader(D3DPixelShader*, void *pPhysicalPart) [sub_825365F8]
+DMC_RENUT_HOOK_RAW(sub_825365F8) {
+  const u32 shader = ctx.r3.u32, physical = ctx.r4.u32;
+  __imp__sub_825365F8(ctx, base);
+  RegisterGuestShader(shader, physical, true);
+}
+
+// D3DVertexDeclaration *D3DDevice_CreateVertexDeclaration(const D3DVERTEXELEMENT9*) [sub_82536C00]
+DMC_RENUT_HOOK_RAW(sub_82536C00) {
+  const u32 elements_va = ctx.r3.u32;
+  __imp__sub_82536C00(ctx, base);
+  const u32 declaration = ctx.r3.u32;
+  if (const auto *elements = declaration ? GuestPtr<const GuestVertexElement>(elements_va) : nullptr)
+    RegisterGuestDeclaration(declaration, elements);
+}
+
+// void D3DVertexShader_Bind(D3DVertexShader *pShader, DWORD Flags,
+//     D3DVertexDeclaration *pDecl, const DWORD *pStreamStrides, D3DPixelShader *pPixelShader) [sub_82543700]
+DMC_RENUT_HOOK_RAW(sub_82543700) {
+  const u32 shader_va = ctx.r3.u32;
+  const u32 declaration_va = ctx.r5.u32;
+  const u32 strides_va = ctx.r6.u32;
+  __imp__sub_82543700(ctx, base);
+
+  const auto *words = declaration_va ? GuestPtr<const be_u32>(declaration_va) : nullptr;
+  const auto *elements = declaration_va ? GuestPtr<const GuestVertexElement>(declaration_va + 52) : nullptr;
+  if (!words || !elements)
+    return;
+
+  const u32 count = u32(words[24 / 4]);
+  const u32 max_stream = u32(words[28 / 4]);
+  VertexDeclarationRecord bound;
+  bound.x360.resource.Common = u32(d3d::ResourceType::VertexDeclaration);
+  bound.self_va = declaration_va;
+  const u32 limit = count ? std::min<u32>(count, 64) : 64;
+  for (u32 i = 0; i < limit; ++i) {
+    if (u32(elements[i].Stream) == 0xFF || u32(elements[i].Type) == kDeclTypeUnused)
+      break;
+    bound.elements.push_back(elements[i]);
+  }
+  BuildDeclarationLayout(bound);
+
+  u32 strides[d3d::kMaxStreams] = {};
+  if (const auto *guest_strides = strides_va ? GuestPtr<const be_u32>(strides_va) : nullptr) {
+    const u32 stream_limit = std::min<u32>(max_stream + 1, d3d::kMaxStreams);
+    for (u32 s = 0; s < stream_limit; ++s)
+      strides[s] = u32(guest_strides[s]);
+    for (const GuestVertexElement &element : bound.elements) {
+      const u32 stream = element.Stream;
+      if (stream < d3d::kMaxStreams)
+        strides[stream] = u32(guest_strides[stream]);
+    }
+  }
+  const u32 binding = InternBinding(shader_va, bound, strides);
+  render_thread::Queue([binding] { ApplyBindingLocked(binding); });
+}

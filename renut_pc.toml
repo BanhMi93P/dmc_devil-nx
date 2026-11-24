@@ -1,0 +1,15 @@
+game_data_root = "G:/!Project/!port/DmC - Devil May Cry/game"
+user_data_root = "G:/!Project/!port/DmC - Devil May Cry/dmc_devil-nx/out/pc_user"
+banjo_renderer = "renut"
+renut_gpu_backend = "vulkan"
+# gpu_plugin = "xenos"  # only used with banjo_renderer = "emulated"
+license_mask = 1
+mnk_mode = true
+banjo_mnk_pad_keystrokes = true
+audio_mute = false
+fullscreen = false
+window_width = 1280
+window_height = 720
+video_mode_width = 1280
+video_mode_height = 720
+window_start_minimized = false

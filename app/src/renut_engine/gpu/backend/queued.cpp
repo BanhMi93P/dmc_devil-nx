@@ -331,6 +331,8 @@ struct DeferredDraw {
   DrawCapture *capture = nullptr;  // owned (g_capture_pool)
   const u8 *scratch = nullptr;
   u32 bytes = 0;
+  const u8 *index_scratch = nullptr;
+  u32 index_bytes = 0;
 };
 std::mutex g_deferred_mutex;
 std::unordered_map<u32, DeferredDraw> g_deferred;
@@ -387,7 +389,8 @@ constexpr u32 kDeltaUnreadEnd = kDeltaVertexF - 0x300;  // 0x480: the fetch cons
 // chunk before the one holding the vertex declaration). SA2: 11008-12224.
 // katamari-nx: a 64-byte chunk boundary, not a field: 11776 is still the last boundary before Beautiful Katamari's
 // vertex declaration (+11812), and the words between are private ones the render thread does not read.
-constexpr u32 kDeltaPrivateUnreadBegin = 10880, kDeltaPrivateUnreadEnd = 11776;
+// DmC (XDK 21119.16384, matching SA2): private block spans 11008..12224 right before VertexDeclaration (12240).
+constexpr u32 kDeltaPrivateUnreadBegin = 11008, kDeltaPrivateUnreadEnd = 12224;
 constexpr bool DeltaChunkRead(u32 i) {
   const u32 at = DeltaChunkOffset(i);
   return !(at < kDeltaUnreadEnd || (at >= kDeltaPrivateUnreadBegin && at + 64 <= kDeltaPrivateUnreadEnd));
@@ -410,7 +413,7 @@ constexpr DeltaChunkList MakeDeltaChunkList(bool narrow) {
 }
 constexpr DeltaChunkList kDeltaAllChunks = MakeDeltaChunkList(false);
 constexpr DeltaChunkList kDeltaReadChunks = MakeDeltaChunkList(true);
-static_assert(kDeltaReadChunks.count == 39);  // N&B (SA2 40; bangaio-nx's XDK 20209: 40)
+static_assert(kDeltaReadChunks.count == 40);  // DmC XDK 21119 / SA2 (N&B: 39)
 
 // bangaio-nx (2026-10-29, banjo_renut_delta_masks, A/B 81 here, 73 in bangaio-nx): a chunk list as runs of whole chunks at consecutive
 // offsets, and each short chunk (the tail's last, 24 bytes in XDK 20209) as a run of its own. CaptureDelta asks
@@ -1140,7 +1143,8 @@ void QueueDraw(u32 device_va, const DrawCall &call, u32 up_vertex_bytes, u32 up_
   QueueCapture(capture);
 }
 
-void QueueDeferredDraw(u32 device_va, const DrawCall &call, const u8 *scratch, u32 bytes) {
+void QueueDeferredDraw(u32 device_va, const DrawCall &call, const u8 *scratch, u32 bytes,
+                       const u8 *index_scratch, u32 index_bytes) {
   NoteDrawer(device_va);  // blur-nx (2026-11-13, M-31's census)
   FlushDeferredVertices(device_va);
   RunReadyCallbacks();
@@ -1174,7 +1178,7 @@ void QueueDeferredDraw(u32 device_va, const DrawCall &call, const u8 *scratch, u
       std::lock_guard lock(g_deferred_mutex);
       if (!g_deferred.count(device_va))
         DeferredOf(device_va).fetch_add(1, std::memory_order_acq_rel);  // blur-nx (2026-11-17)
-      g_deferred[device_va] = {capture, scratch, bytes};
+      g_deferred[device_va] = {capture, scratch, bytes, index_scratch, index_bytes};
       g_deferred_count.store(g_deferred.size(), std::memory_order_release);
       g_delta.deferred_device = device_va;  // blur-nx (2026-11-13, #51): cleared when FlushDeferredVertices queues it
       return;
@@ -1202,7 +1206,7 @@ void QueueDeferredDraw(u32 device_va, const DrawCall &call, const u8 *scratch, u
     DeferredOf(device_va).fetch_add(1, std::memory_order_acq_rel);  // blur-nx (2026-11-17)
   DeferredDraw &slot = g_deferred[device_va];
   g_capture_pool.Give(slot.capture);  // one not flushed (the original replaced it the same way)
-  slot = {capture, scratch, bytes};
+  slot = {capture, scratch, bytes, index_scratch, index_bytes};
   g_deferred_count.store(g_deferred.size(), std::memory_order_release);
 }
 
@@ -1231,6 +1235,10 @@ void FlushDeferredVertices(u32 device_va) {
     g_deferred_count.store(g_deferred.size(), std::memory_order_release);
   }
   deferred.capture->vertices.assign(deferred.scratch, deferred.scratch + deferred.bytes);
+  if (deferred.index_scratch && deferred.index_bytes) {
+    deferred.capture->indices.assign(deferred.index_scratch, deferred.index_scratch + deferred.index_bytes);
+    g_deferred_vertex_bytes.fetch_add(deferred.index_bytes, std::memory_order_relaxed);
+  }
   // blur-nx (2026-11-13, #52's census): the vertex bytes the flush copies (a scratch ring could leave them in place).
   g_deferred_vertex_bytes.fetch_add(deferred.bytes, std::memory_order_relaxed);
   g_deferred_vertex_draws.fetch_add(1, std::memory_order_relaxed);

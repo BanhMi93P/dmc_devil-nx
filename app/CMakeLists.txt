@@ -1,4 +1,4 @@
-﻿# renut - ReXGlue Recompiled Project
+# renut - ReXGlue Recompiled Project
 #
 # This file is yours to edit. 'rexglue migrate' will NOT overwrite it.
 # SDK boilerplate lives in generated/rexglue.cmake.
@@ -199,7 +199,7 @@ endif()
 # shader harvest): src/katamari_keys.cpp defines the keys of those files that the kept ones still read.
 # renut-ultimate (2026-11-20, port 193): the game's name in the build stamp (src/build_stamp.cpp) and the NRO's title. A
 # port sets its own here.
-set(RENUT_GAME_NAME "Beautiful Katamari")
+set(RENUT_GAME_NAME "DmC - Devil May Cry")
 
 set(RENUT_SOURCES
     src/main.cpp
@@ -234,11 +234,6 @@ set(RENUT_SOURCES
     src/cpu/banjo_forms_selfcheck.cpp
     # blur-nx (2026-11-11, port 90): timings of a few processor forms at boot (blur_microbench, off).
     src/cpu/blur_microbench.cpp
-    # katamari-nx (2026-11-01): diagnostic of the game state's stage fields (katamari_diag_game_state, off).
-    src/cpu/katamari_stage_diag.cpp
-    # renut-ultimate (2026-11-23): the movies (data/movie/*.wmv) by FFmpeg's WMV3 decoder, or nxvideo (NVDEC) when the
-    # installer re-encoded them to H.265: vivapinata-nx's / banjo-nx's / culdcept-nx's hook at Katamari's addresses.
-    src/cpu/katamari_wmv_ffmpeg.cpp
     # katamari-nx: the native copies of hot game functions (banjo_hot_guest.cpp and its shards), from this game's PC
     # profile (docs/katamari-notes.md, "Hot functions"): src/cpu/hot/localized.txt and hand.txt.
     src/cpu/banjo_hot_guest.cpp
@@ -309,7 +304,7 @@ rexglue_setup_target(renut GPU_PLUGINS xenos)
 # banjo-nx (2026-10-17): Ryujinx starts NROs without argv[0]; the SDK then takes the NRO's usual place on the SD
 # (sdk/src/core/filesystem_posix.cpp). A console's hbloader always passes the path, so nothing changes there.
 if(REXGLUE_PLATFORM_SWITCH AND TARGET rexcore)
-    target_compile_definitions(rexcore PRIVATE REX_SWITCH_FALLBACK_EXE="/switch/katamari-nx/katamari-nx.nro")
+    target_compile_definitions(rexcore PRIVATE REX_SWITCH_FALLBACK_EXE="/switch/dmc_devil/dmc_devil.nro")
 endif()
 
 # banjo-nx (2026-10-16): Renut's Direct3D-level renderer as a second renderer, chosen at boot (banjo_renderer = "renut";
@@ -1015,8 +1010,8 @@ if(REXGLUE_PLATFORM_SWITCH)
     # index, the DLC read in place and the collection screen's tile fix.
     rexglue_switch_add_nro(renut
         NAME "${RENUT_GAME_NAME}"  # port 193: set once, above
-        AUTHOR "ChanseyIsTheBest"
-        VERSION "1.0.2"
+        AUTHOR "Bánh Mì"
+        VERSION "1.0.0"
         ${RENUT_ICON_ARG})
 endif()
 

@@ -1,3 +1,14 @@
+# DmC: Devil May Cry Port Changelog
+
+## Phase 2B — PC Native Renderer (`renut` Vulkan) Verification
+- Implemented UE3 stacked 2D array (`16x16x16`) over 2D colour resolve (`16x512`) aliasing in `textures.{h,cpp}` and `draw.cpp` (`StackedResolveSource`, `CopyStackedResolve`, `NoteColorResolveWrittenLocked`, `MaterialiseHandOverLocked`), resolving Mission 1 black screen.
+- Fixed `SyncColorViewLocked` (`draw.cpp`) to compare `write_seq` instead of `bound_serial`, eliminating false `Resolve through a view of format` warnings.
+- Enabled `RENUT_VERTEX_INPUTS_MORPH` in `XenosRecomp` and `banjo_renut_gpu` (`35,734 / 35,734` shaders compiled cleanly).
+- Increased `kSamplerDescriptorCount` and `SamplerDescriptorHeapSize` from `1024` to `2048` (`video.h`, `plume_d3d12.cpp`), eliminating `Sampler table full` warnings.
+- Added XDK 21119 queued command buffer / `BeginIndexedVertices` / `EndVertices` support, `NTJobCode.xex` DLL module support, and verified Gate B (`59.93 FPS`, full audio, `0` CPU self-check diffs, CG-13 census passed for `BLUR_FPCR_ONE_MODE=ON`).
+
+---
+
 # Changelog
 
 One entry per port of the ultimate base, by number. Each port's full row (its source port and commit, the evidence,

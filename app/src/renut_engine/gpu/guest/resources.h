@@ -160,6 +160,11 @@ void BuildDeclarationLayout(VertexDeclarationRecord &declaration);
 // Requires State().mutex.
 const VertexDeclarationRecord *ShaderFetchDeclarationLocked(ShaderRecord &vs);
 
+// Guest-allocated vertex declarations (DmC CreateVertexDeclaration / internal declarations).
+// Requires State().mutex.
+const VertexDeclarationRecord *FindGuestDeclarationLocked(u32 declaration_va);
+void ReleaseGuestDeclarationLocked(u32 declaration_va);
+
 // The shader's host object, building it on first call. nullptr if the shader
 // is missing from the cache or creation failed. Requires State().mutex.
 plume::RenderShader *GetHostShader(ShaderRecord *shader);

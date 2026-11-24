@@ -806,7 +806,7 @@ bool Create(HostTexture &t, const TextureFetch &fetch, bool render_target,
   const u32 size_levels = 32 - u32(std::countl_zero(largest));
   t.mip_levels = render_target ? 1 : std::min(fetch.MaxMipLevel() + 1, size_levels);
   t.render_target = render_target;
-  plume::RenderFormat format = render_target ? rt_format : t.info.host;
+  plume::RenderFormat format = rt_format != plume::RenderFormat::UNKNOWN ? rt_format : t.info.host;
   if (format == plume::RenderFormat::UNKNOWN)
     return false;
 
@@ -1069,6 +1069,32 @@ HostTexture *DepthWordsSource(const TextureFetch &fetch) {
   return source;
 }
 
+// 2D colour resolve destination whose vertical slice strip holds a stacked 2D
+// texture's layers (each slice aligned to a 32-block vertical tile stride,
+// e.g. UE3 FCombineLUTs resolving a 16x512 2D target read as 16x16x16 stacked).
+HostTexture *StackedResolveSource(const TextureFetch &fetch) {
+  if (fetch.Dimension() != TextureDimension::Tex2D || !fetch.Stacked() || g_resolve_targets.empty())
+    return nullptr;
+  auto it = g_resolve_targets.find(fetch.BasePage());
+  if (it == g_resolve_targets.end())
+    return nullptr;
+  HostTexture *source = it->second;
+  if (!source || !source->texture || source->words || source->dimension != TextureDimension::Tex2D ||
+      source->stacked || source->guest_format != fetch.Format())
+    return nullptr;
+  u32 width = 0, height = 0, depth = 1;
+  fetch.Size(width, height, depth);
+  if (depth < 2 || source->width != width)
+    return nullptr;
+  u32 bw = 1, bh = 1;
+  FormatBlockSize(fetch.Format(), bw, bh);
+  const u32 tile_h = bh * 32;
+  const u32 slice_stride_y = ((height + tile_h - 1) / tile_h) * tile_h;
+  if (source->height < (depth - 1) * slice_stride_y + height)
+    return nullptr;
+  return source;
+}
+
 // banjo-nx (banjo_gpu_depth_words_view, package 28): the slot of a view of the depth resolve's words that 't' (a
 // texture over its memory) samples instead of its own copy, or UINT32_MAX (then the copy). The copy is of the whole
 // words texture into a texture of the same format, size and one level, made at the first bind after each resolve, and
@@ -1127,6 +1153,42 @@ void CopyDepthWords(HostTexture &t, HostTexture &source) {
   cmd->copyTextureRegion(plume::RenderTextureCopyLocation::Subresource(t.texture.get(), 0, 0),
                          plume::RenderTextureCopyLocation::Subresource(source.words->texture.get()),
                          0, 0, 0, &box);
+  t.copied_resolve = source.resolves;
+  t.uploaded = true;
+}
+
+// Copies slices of a 2D colour resolve destination (32-row vertical tile stride)
+// into a stacked 2D array texture over the same base page when the resolve has updated.
+void CopyStackedResolve(HostTexture &t, HostTexture &source) {
+  source.has_stacked_alias = true;
+  if (t.uploaded && source.resolves != 0 && t.copied_resolve == source.resolves)
+    return;
+  if (source.handed_from || source.held_current)
+    MaterialiseHandOverLocked(source);
+  FlushResolveMipsLocked(source);
+  ++g_texture_epoch;
+  plume::RenderCommandList *cmd = State().command_list;
+  TransitionTextureLocked(&source, plume::RenderTextureLayout::COPY_SOURCE);
+  TransitionTextureLocked(&t, plume::RenderTextureLayout::COPY_DEST);
+  u32 bw = 1, bh = 1;
+  FormatBlockSize(t.guest_format, bw, bh);
+  const u32 tile_h = bh * 32;
+  const u32 guest_stride_y = ((t.height + tile_h - 1) / tile_h) * tile_h;
+  const uint32_t copy_w = std::min({t.scale.Size(t.width), t.alloc_width, source.alloc_width});
+  const uint32_t copy_h = std::min({t.scale.Size(t.height), t.alloc_height});
+  const uint32_t layers = StackedLayers(t);
+  for (uint32_t z = 0; z < layers; ++z) {
+    const uint32_t src_slice = std::min(z, t.depth - 1);
+    const uint32_t src_y = source.scale.Size(src_slice * guest_stride_y);
+    if (src_y >= source.alloc_height || !copy_w || !copy_h)
+      continue;
+    const uint32_t h = std::min(copy_h, source.alloc_height - src_y);
+    const plume::RenderBox box(0, int32_t(src_y), int32_t(copy_w), int32_t(src_y + h));
+    cmd->copyTextureRegion(plume::RenderTextureCopyLocation::Subresource(t.texture.get(), 0, z),
+                           plume::RenderTextureCopyLocation::Subresource(source.texture.get(), 0, 0),
+                           0, 0, 0, &box);
+  }
+  TransitionTextureLocked(&source, plume::RenderTextureLayout::SHADER_READ);
   t.copied_resolve = source.resolves;
   t.uploaded = true;
 }
@@ -2107,8 +2169,17 @@ TextureBinding BindTextureLocked(u32 texture_va, const TextureFetch &device_fetc
     if (fx)
       fx->depth_source = true;  // banjo-nx (2026-10-19, render-thread proposal 3)
   }
-  const RenderScale scale = depth_source ? depth_source->scale : RenderScale{};
-  if (slot && !slot->gpu_written && slot->scale != scale) {
+  HostTexture *stacked_source =
+      !(slot && slot->gpu_written) && !depth_source ? StackedResolveSource(fetch) : nullptr;
+  if (stacked_source) {
+    stacked_source->has_stacked_alias = true;
+    if (fx)
+      fx->depth_source = true;
+  }
+  const RenderScale scale =
+      depth_source ? depth_source->scale : stacked_source ? stacked_source->scale : RenderScale{};
+  if (slot && !slot->gpu_written &&
+      (slot->scale != scale || (stacked_source && slot->host_format != stacked_source->host_format))) {
     Retire(*slot);
     slot.reset();
   }
@@ -2118,12 +2189,12 @@ TextureBinding BindTextureLocked(u32 texture_va, const TextureFetch &device_fetc
   // then refused it (the sizes differ) and CopyDepthWords copied the scale's new, larger size into it: a GPU write past
   // the image, which hung the console once the memory batch packed live data behind it. ResolveTarget already makes a
   // destination again when alloc_width != scale.Size(width); this is the same rule for the textures sampling it.
-  if (banjo::renut_gpu::TextureScaleSizeCheckOn() && slot && !slot->gpu_written && slot->texture && depth_source &&
-      scale.code != 0 && plume::RenderFormatBlockWidth(slot->host_format) <= 1 &&
+  if (banjo::renut_gpu::TextureScaleSizeCheckOn() && slot && !slot->gpu_written && slot->texture &&
+      (depth_source || stacked_source) && scale.code != 0 && plume::RenderFormatBlockWidth(slot->host_format) <= 1 &&
       (slot->alloc_width != scale.Size(slot->width) || slot->alloc_height != scale.Size(slot->height))) {
     static uint64_t remade = 0;
     if (const uint64_t n = ++remade; n <= 8 || (n & (n - 1)) == 0)
-      RGPU_INFO("[renut] texture {:08X} over a depth resolve made again: {}x{} host, its scale's size now {}x{} (the "
+      RGPU_INFO("[renut] texture {:08X} over a resolve made again: {}x{} host, its scale's size now {}x{} (the "
                 "code's size changed; sasrt_texture_scale_size_check; {} so far)", texture_va, slot->alloc_width,
                 slot->alloc_height, scale.Size(slot->width), scale.Size(slot->height), n);
     Retire(*slot);
@@ -2133,7 +2204,7 @@ TextureBinding BindTextureLocked(u32 texture_va, const TextureFetch &device_fetc
     // banjo-nx (2026-10-18, the colour flashes): memory a resolve wrote, sampled as other data than the resolve's
     // (ResolvedAlias said no) and not as its depth words: this texture is made from guest memory, which only has what
     // the CPU wrote there.
-    if (!depth_source) {
+    if (!depth_source && !stacked_source) {
       auto it = g_resolve_targets.find(fetch.BasePage());
       if (it != g_resolve_targets.end() && it->second && it->second->texture) {
         static uint32_t logged = 0;
@@ -2144,11 +2215,22 @@ TextureBinding BindTextureLocked(u32 texture_va, const TextureFetch &device_fetc
                     g_frame, texture_va, u32(fetch.Format()), r.guest_va, r.width, r.height, u32(r.guest_format),
                     r.desc[1], r.desc[2], r.desc[5], desc[1], desc[2], desc[5]);
       }
+    } else if (stacked_source) {
+      static uint32_t logged = 0;
+      if (logged++ < 8) {
+        u32 sw = 0, sh = 0, sd = 1;
+        fetch.Size(sw, sh, sd);
+        RGPU_INFO("[renut] stacked texture {:08X} ({}x{}x{} fmt {}) aliases 2D resolve destination {:08X} ({}x{})",
+                  texture_va, sw, sh, sd, u32(fetch.Format()), stacked_source->guest_va, stacked_source->width,
+                  stacked_source->height);
+      }
     }
     slot = std::make_unique<HostTexture>();
     slot->guest_va = texture_va;
     std::memcpy(slot->desc, desc, sizeof(desc));
-    if (!Create(*slot, fetch, false, plume::RenderFormat::UNKNOWN, false, scale)) {
+    if (!Create(*slot, fetch, false,
+                stacked_source ? stacked_source->host_format : plume::RenderFormat::UNKNOWN,
+                stacked_source ? stacked_source->view_swap_red_blue : false, scale)) {
       static uint32_t logged = 0;
       if (logged++ < 16) {
         RGPU_WARN("Texture {:08X}: format {} {}x{}x{} not supported", texture_va,
@@ -2199,6 +2281,8 @@ TextureBinding BindTextureLocked(u32 texture_va, const TextureFetch &device_fetc
                 depth_source->guest_va);
     }
     CopyDepthWords(t, *depth_source);
+  } else if (stacked_source && !t.gpu_written) {
+    CopyStackedResolve(t, *stacked_source);
   } else if (!t.gpu_written && t.checked_frame != g_frame) {
     t.checked_frame = g_frame;
     if (!fetch.Tiled()) {
@@ -2259,7 +2343,7 @@ TextureBinding BindTextureLocked(u32 texture_va, const TextureFetch &device_fetc
   if (fx) {
     fx->transition[0] = &t;
     fx->float_sampled = t.words != nullptr;
-    fx->slot_texture = !depth_source;  // banjo-nx (2026-10-27): RefreshBindingLocked's
+    fx->slot_texture = !depth_source && !stacked_source;  // banjo-nx (2026-10-27): RefreshBindingLocked's
   }
   binding.dimension = t.dimension;
   binding.slot = SlotForSwizzle(t, swizzle);
@@ -2385,6 +2469,15 @@ HostTexture *GetResolveTextureLocked(u32 texture_va, plume::RenderFormat format,
                                      const d3d::TextureFetchConstant *header_format, uint32_t cover_pixels) {
   TextureFetch fetch;
   return ResolveTarget(texture_va, format, scale, header_format, false, fetch, cover_pixels);  // port 76 (212)
+}
+
+void NoteColorResolveWrittenLocked(HostTexture &dest) {
+  ++dest.resolves;
+  if (dest.has_stacked_alias) {
+    ++g_depth_epoch;
+    ++g_texture_epoch;
+    BumpTexturePage(dest.base_page);
+  }
 }
 
 HostTexture *GetDepthResolveTextureLocked(u32 texture_va, RenderScale scale,

@@ -27,7 +27,7 @@ namespace renut::gpu {
 
 constexpr uint32_t kFramesInFlight = 2;
 constexpr uint32_t kTextureDescriptorCount = 8192;
-constexpr uint32_t kSamplerDescriptorCount = 1024;  // vivapinata-nx: 256 before the families below
+constexpr uint32_t kSamplerDescriptorCount = 2048;  // dmc_devil-nx: 1024 hit 'Sampler table full' in Mission 1 (203 families)
 constexpr uint32_t kInvalidDescriptor = UINT32_MAX;
 
 // Fixed bindless slots. The table is shared by the 2D, 3D and cube arrays the

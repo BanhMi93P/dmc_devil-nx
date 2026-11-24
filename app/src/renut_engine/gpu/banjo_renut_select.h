@@ -93,3 +93,25 @@ inline bool Active() {
     __imp__##subroutine(ctx, base);                                                    \
     return;                                                                            \
   }
+
+#define DMC_RENUT_HOOK(subroutine, function)                                           \
+  REX_EXTERN(__imp__##subroutine);                                                     \
+  extern "C" REX_FUNC(subroutine) {                                                    \
+    if (::banjo::renut_gpu::Active()) {                                                \
+      ::rex::ppc::HostToGuestFunction<function>(ctx, base);                            \
+      return;                                                                          \
+    }                                                                                  \
+    __imp__##subroutine(ctx, base);                                                    \
+  }
+
+#define DMC_RENUT_HOOK_RAW(subroutine)                                                 \
+  REX_EXTERN(__imp__##subroutine);                                                     \
+  static void dmc_renut_raw_##subroutine(PPCContext& ctx, uint8_t* base);              \
+  extern "C" REX_FUNC(subroutine) {                                                    \
+    if (::banjo::renut_gpu::Active()) {                                                \
+      dmc_renut_raw_##subroutine(ctx, base);                                           \
+      return;                                                                          \
+    }                                                                                  \
+    __imp__##subroutine(ctx, base);                                                    \
+  }                                                                                    \
+  static void dmc_renut_raw_##subroutine([[maybe_unused]] PPCContext& __restrict ctx, uint8_t* base)

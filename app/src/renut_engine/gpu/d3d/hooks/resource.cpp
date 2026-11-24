@@ -45,11 +45,7 @@
 
 using namespace renut::gpu;
 
-// N&B's XMemFree (0x822089F0), its own allocator (not D3D code): for the
-// memory of resources N&B's code allocated itself.
-// katamari-nx: Beautiful Katamari's XMemFree is sub_824CAB98 (the hardware-device init frees with
-// `lis r4,0xB1800000; li r3,0; bl` to it where N&B's calls sub_822089F0).
-REX_IMPORT(__imp__sub_824CAB98, GameXMemFree, void(u32, u32));
+static inline void GameXMemFree(u32, u32) {}
 // The kernel's physical memory, as XPhysicalAlloc / XPhysicalFree use it.
 REX_IMPORT(__imp__MmAllocatePhysicalMemoryEx, MmAllocatePhysicalMemoryEx,
            u32(u32, u32, u32, u32, u32, u32));
@@ -123,9 +119,9 @@ void FreePhysical(u32 va) {
     MmFreePhysicalMemory(0, va);
 }
 
-// The GPU format table (word_82005200): per D3D format low 6 bits, bits per
+// The GPU format table: per D3D format low 6 bits, bits per
 // pixel in the low byte, flags in the high one.
-constexpr u32 kFormatTable = 0x820FA9D0;  // katamari-nx: 0x82005200->0x820FA9D0
+constexpr u32 kFormatTable = 0x8227A0E0;
 
 u16 FormatTableEntry(u32 format) {
   const auto *table = GuestPtr<const be_u16>(kFormatTable);
@@ -136,8 +132,8 @@ u32 FormatBitsPerPixel(u32 format) {
   return FormatTableEntry(format) & 0xFF;
 }
 
-// The word at 0x82E108A0: set while a depth surface owns the HiZ memory.
-constexpr u32 kHiZOwnerVa = 0x8315E830;  // katamari-nx: 0x82E108A0->0x8315E830
+// Set while a depth surface owns the HiZ memory.
+constexpr u32 kHiZOwnerVa = 0x836B99F8;
 
 u32 LoadU32(u32 va) {
   const auto *p = GuestPtr<const be_u32>(va);
@@ -1714,6 +1710,7 @@ u32 AddRefResource(u32 resource) {
 
 } // namespace renut::gpu::native
 
+#if 0  // katamari-nx hooks disabled for DmC
 BANJO_RENUT_HOOK(sub_824D23F8, D3DDevice_CreateSurface_hook);  // D3DDevice_CreateSurface  // katamari-nx: N&B sub_8263EB88, D3DDevice_CreateSurface: InitializePresentationParameters calls it twice for the auto surfaces, as N&B's; sig 0.61/0.41
 BANJO_RENUT_HOOK(sub_824DB028, D3DResource_Destroy_hook);  // D3DResource_Destroy  // katamari-nx: N&B sub_821D7A00, D3DResource_Destroy: HiZ owner 0x8315E830 (N&B 0x82E108A0), VdGlobalDevice record 0x82000750; sig 0.59/0.33
 BANJO_RENUT_HOOK(sub_824DB448, D3D_UnlockResource_hook);  // D3D_UnlockResource  // katamari-nx: N&B sub_8263D360, D3D_UnlockResource: sig 0.61/0.26
@@ -1759,3 +1756,15 @@ BANJO_RENUT_UNHOOKED_HOOK(sub_8263DCA8, GetGpuTextureDimensions_hook);  // D3D_G
 BANJO_RENUT_HOOK(sub_824D0788, BlockSizeOfGpuFormat_hook);  // D3D_BlockSizeOfGpuFormat  // katamari-nx: N&B sub_821D70A8, signature 1.00 (next 0.26)
 BANJO_RENUT_HOOK(sub_824D08A8, AlignTextureDimensions_hook);  // D3D_AlignTextureDimensions  // katamari-nx: N&B sub_821D7140, signature 1.00 (next 0.29)
 BANJO_RENUT_HOOK(sub_824D0D38, GetMipTailLevelOffsetCoords_hook);  // D3D_GetMipTailLevelOffsetCoords  // katamari-nx: N&B sub_8263DD48, signature 0.95 (next 0.28)
+#endif
+
+DMC_RENUT_HOOK_RAW(sub_8252E7C8) {  // D3DResource_Destroy
+  const u32 resource = ctx.r3.u32;
+  render_thread::Queue([resource] {
+    ReleaseHostSurfaceLocked(resource);
+    ReleaseHostTextureLocked(resource);
+    ReleaseGuestShaderLocked(resource);
+    ReleaseGuestDeclarationLocked(resource);
+  });
+  __imp__sub_8252E7C8(ctx, base);
+}

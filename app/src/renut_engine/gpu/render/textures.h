@@ -152,8 +152,9 @@ struct HostTexture {
   bool depth_read = false;
   bool depth_skipped = false;
   // A texture over a depth resolve's memory: the resolve its words were
-  // copied from last.
+  // copied from last. Also used for a stacked 2D array over a 2D colour resolve.
   uint64_t copied_resolve = 0;
+  bool has_stacked_alias = false;  // 2D colour resolve destination copied into a stacked 2D array alias (e.g. UE3 16x512 -> 16x16x16 LUT)
   // banjo-nx (banjo_gpu_depth_words_view, package 28): views of 'words' that the textures over the resolve's memory
   // sample instead of a copy (one per fetch swizzle), with their bindless slots; they go with 'words'.
   struct WordsView {
@@ -282,6 +283,7 @@ TextureBinding BindTextureLocked(u32 texture_va, const TextureFetch &device_fetc
 // (its own texture); and a destination that goes stops holding anything.
 uint32_t DepthHandOverSlotLocked(HostTexture &dest, const plume::RenderComponentMapping &mapping, BindEffects *fx);
 void DepthHandOverForgetLocked(HostTexture &dest);
+void MaterialiseHandOverLocked(HostTexture &dest);
 
 // The guest memory a texture's data spans: pages[0]/sizes[0] its base level,
 // pages[1]/sizes[1] its mip chain (a page is 4 KiB of physical memory; a zero
@@ -302,6 +304,7 @@ void PrefetchTextureGuestExtent(const TextureFetch &fetch);
 HostTexture *GetResolveTextureLocked(u32 texture_va, plume::RenderFormat format, RenderScale scale,
                                      const d3d::TextureFetchConstant *header_format = nullptr,
                                      uint32_t cover_pixels = 0);
+void NoteColorResolveWrittenLocked(HostTexture &dest);
 
 // The same for a depth resolve: a kDepthResolveFormat target plus the guest
 // words (kDepthResolveWordsFormat), which a texture of a 32-bit 8_8_8_8

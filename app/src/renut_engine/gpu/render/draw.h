@@ -235,7 +235,7 @@ enum DrawField : u32 {
 // too: the fast draw kept the draw before's vertex layout for Culdcept Saga's board panels (FVF quads), which then drew
 // wrong or not at all on deko3d (found with a field-forcing bisection in Ryujinx: forcing kFieldDecl alone brought them
 // back).
-constexpr u32 kDeviceOwnDeclarationBegin = 0x2F98, kDeviceOwnDeclarationEnd = 0x2F98 + 52 + 15 * 12;
+constexpr u32 kDeviceOwnDeclarationBegin = 0x3118, kDeviceOwnDeclarationEnd = 0x3118 + 52 + 15 * 12;
 constexpr u32 FieldOfOffset(u32 at) {
   if (at < 0x480)
     return 0;
@@ -257,13 +257,11 @@ constexpr u32 FieldOfOffset(u32 at) {
     return kField29C0;
   if (at < 0x2A80)
     return kFieldMisc;
-  // Title update 3's CDevice (banjo-nx 2026-10-29): 4 bytes more from 0x2AC0 and 8 from 0x2E30 (the base's 0x2E2C),
-  // the same from 0x3390 (d3d.h); the base's boundaries in the comments of DrawField moved with their fields.
-  if (at < 0x2DF8)  // katamari-nx: 0x2E04->0x2DF8
+  if (at < d3d::kDeviceOffsetVertexDeclaration)
     return kFieldUnread;
   if (at >= d3d::kDeviceOffsetVertexDeclaration && at < d3d::kDeviceOffsetVertexDeclaration + 4)
     return kFieldDecl;
-  if (at < 0x2EF8)  // katamari-nx: 0x2F08->0x2EF8
+  if (at < d3d::kDeviceOffsetVertexDeclaration + 0x104)
     return kFieldPrivate;
   if (at < d3d::kDeviceOffsetIndexBuffer)
     return kFieldTail;
@@ -275,7 +273,7 @@ constexpr u32 FieldOfOffset(u32 at) {
     return kFieldStreams;
   if (at < d3d::kDeviceOffsetTextures + 4 * d3d::kTextureFetchSlots)
     return kFieldTexWords;
-  if (at < 0x317C)  // katamari-nx: 0x318C->0x317C
+  if (at < 13052)
     return kFieldTail;
   if (at < d3d::kDeviceOffsetPixelShader)
     return kFieldScissor;

@@ -8,3 +8,8 @@ out_directory_path = "generated"
 includes = [
  "renut_config.toml"
 ]
+
+[[modules]]
+file_path = "../../game/Binaries/NTJobCode/xenon/submission/NTJobCode.xex"
+guest_path = "game:\\BINARIES\\NTJOBCODE\\XENON\\SUBMISSION\\NTJOBCODE.XEX"
+out_directory_path = "generated/ntjobcode"

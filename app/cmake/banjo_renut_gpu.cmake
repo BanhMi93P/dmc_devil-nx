@@ -116,6 +116,7 @@ if(COMMAND rexglue_apply_target_settings)
     rexglue_apply_target_settings(banjo_renut_gpu)
 endif()
 renut_gpu_setup(banjo_renut_gpu)
+target_compile_definitions(banjo_renut_gpu PRIVATE RENUT_VERTEX_INPUTS_MORPH)
 # banjo-nx (2026-10-23, render-thread round): the draw path's function-local statics (cvars read once: about 15 a draw,
 # StoreCards / PhysicalOf at every page check) without the thread-safe guard, whose fast path is a load-acquire (LDARB)
 # that holds back every later load on the A57. Sound here: these files run on the render thread; the one other caller
