@@ -1106,8 +1106,18 @@ namespace plume {
         bool on = false;
         uint64_t size = 0, used = 0, peak = 0, freeBytes = 0, largestFree = 0, givenBack = 0, refused = 0;
         uint32_t freeRanges = 0, blocks = 0, growths = 0, givebacks = 0;
+        // sasrt-nx 1.0.1 (2026-11-24): the free range at the region's bottom (what Deko3DRegionGiveBack can return to
+        // newlib), and the region's growths and fallbacks refused for the CPU side's reserve (Deko3DSetRegionCpuReserve).
+        uint64_t freeBottom = 0, reserveRefused = 0;
     };
     void Deko3DGpuRegionFigures(Deko3DGpuRegionInfo &out);
+    // sasrt-nx 1.0.1 (2026-11-24, SASRT's docked bad_alloc: the region grew down to newlib's last 32 MB, then the game's
+    // own allocation failed with 0.6 MB of heap left): the room the GPU side leaves to newlib. The region does not lower
+    // newlib's end closer than this above its break, and a GPU block the region could not place does not take newlib's
+    // memory below it either: such a block fails (the memory emergency path, which the governor answers by releasing
+    // textures and stepping the resolution down) where the CPU side's failure is a crash. 32 MB (the old
+    // kRegionNewlibSlack) until set.
+    void Deko3DSetRegionCpuReserve(uint64_t bytes);
     // sasrt-nx (2026-11-09; port 58, for a title's memory governor): the heap's free bytes as the memory-block log lines
     // count them (the free chunks inside what malloc has taken and what sbrk can still give; mallinfo walks every free
     // piece under malloc's lock: 7-21 ms in SASRT's docked race, a cold-path figure).

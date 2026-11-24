@@ -398,3 +398,9 @@ Ports 1-43 are the first round: the universal fixes of the other ports' renderer
   screen, columns 2 and 4).
 - Port 269 (the Peggle 2 session's finding): the app's dialogs are released in OnShutdown, before the SDK frees
   their drawer (a normal quit faulted in ~GameMenuDialog).
+- Port 270 (sasrt-nx 1.0.1, blur-nx's): newlib's break moves under malloc's lock, and the GPU region's free bottom
+  goes back before a move fails (in place: no malloc inside newlib's extend).
+- Port 271 (sasrt-nx 1.0.1): the memory governor watches the CPU side's own room (heap and the region's free
+  bottom), and the GPU region leaves the CPU side a reserve (sasrt_region_cpu_reserve_mb, 160).
+- Port 272 (sasrt-nx 1.0.1): sasrt_dynamic_docked_start_top, off: docked dynamic resolution may start at its top.
+- Port 273 (sasrt-nx 1.0.1): a bad_alloc crash reason gets the heap's figures.
