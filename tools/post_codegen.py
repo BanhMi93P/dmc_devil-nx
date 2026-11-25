@@ -107,6 +107,9 @@ def main():
     run(tool('vec_dcbz_zva.py'), '--gen', gen, '--restore')
     # banjo-nx (2026-10-19): the store cards were the last step: out first.
     run(tool('store_cards.py'), '--gen', gen, '--restore')
+    ntjob = os.path.join(gen, 'ntjobcode')
+    if os.path.isdir(ntjob):
+        run(tool('store_cards.py'), '--gen', ntjob, '--restore')
     run(tool('switch_goto.py'), '--gen', gen, '--restore')
     run(tool('r1_local.py'), '--gen', gen, '--restore')
     run(tool('lr_preserve.py'), '--gen', gen, '--out', os.path.join(ROOT, 'out', 'cpu_aggressive_proofs'), '--restore')
@@ -255,6 +258,8 @@ def main():
     # banjo-nx (2026-10-19, CPU proposal 1): the store cards, after everything else (the inline copies included): every
     # store outside the stack marks its page for Renut's cached vertex and index copies (REX_STORE_CARDS_OFF).
     run(tool('store_cards.py'), '--gen', gen)
+    if os.path.isdir(ntjob):
+        run(tool('store_cards.py'), '--gen', ntjob)
     # blur-nx (2026-11-11, CPU batch 2, docs/vector-store-ideas.md VS-14): in the copies, one card check per group of
     # card stores to the same base in a straight stretch (two at its end: the lowest and highest offset's page).
     run(tool('card_groups.py'), '--gen', gen)

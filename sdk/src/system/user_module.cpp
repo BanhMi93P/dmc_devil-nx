@@ -15,6 +15,7 @@
 #include <rex/logging.h>
 #include <rex/runtime.h>
 #include <rex/stream.h>
+#include <rex/string.h>
 #include <rex/system/elf_module.h>
 #include <rex/system/function_dispatcher.h>
 #include <rex/system/kernel_state.h>
@@ -109,13 +110,28 @@ X_STATUS UserModule::LoadFromFile(const std::string_view path) {
   // Only when update: is mounted (Runtime::SetupVfs registers it for an existing update_data_root): a path on a
   // device that is not there logs an error ("device not found"; Katamari, which has no title update, 2026-11-20).
   std::string update_target;
-  if (!patch_entry && kernel_state_->file_system()->FindSymbolicLink("update:", update_target)) {
+  const bool has_update_link =
+      kernel_state_->file_system()->FindSymbolicLink("update:", update_target);
+  if (!patch_entry && has_update_link) {
     std::string file = name_;
     const size_t slash = path_.find_last_of("\\/");
     if (file.empty() || file.find('.') == std::string::npos) {
       file = path_.substr(slash == std::string::npos ? 0 : slash + 1);
     }
     patch_entry = kernel_state_->file_system()->ResolvePath("update:\\" + file + "p");
+    if (!patch_entry) {
+      std::string rel = fs_entry->path();
+      while (!rel.empty() && (rel.front() == '\\' || rel.front() == '/')) {
+        rel.erase(0, 1);
+      }
+      if (!rel.empty() && rel != file) {
+        patch_entry = kernel_state_->file_system()->ResolvePath("update:\\" + rel + "p");
+      }
+    }
+  }
+  if (!patch_entry && !xex_module()->is_patch() && rex::string::utf8_equal_case(name_, "default")) {
+    REXSYS_WARN("No XEX patch found for {} (update: symlink {})", path_,
+                has_update_link ? update_target : "not mounted");
   }
   if (patch_entry) {
     auto patch_path = patch_entry->absolute_path();

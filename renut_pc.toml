@@ -2,7 +2,8 @@ game_data_root = "G:/!Project/!port/DmC - Devil May Cry/game"
 user_data_root = "G:/!Project/!port/DmC - Devil May Cry/dmc_devil-nx/out/pc_user"
 banjo_renderer = "renut"
 renut_gpu_backend = "vulkan"
-# gpu_plugin = "xenos"  # only used with banjo_renderer = "emulated"
+gpu_plugin = ""
+masseffect_renderer_native = false
 license_mask = 1
 mnk_mode = true
 banjo_mnk_pad_keystrokes = true
@@ -13,3 +14,28 @@ window_height = 720
 video_mode_width = 1280
 video_mode_height = 720
 window_start_minimized = false
+renut_resolution = "720p"
+gpu_allow_invalid_fetch_constants = true
+kernel_scatter_read_offset_zero = true
+
+# Switch-proven UE3 renderer & IO safety defaults
+banjo_renut_core_layout = false
+banjo_renut_resolve_skip = true
+banjo_renut_alpha_to_mask_test = false
+banjo_renut_dynamic_texture_rows = false
+banjo_renut_keep_unused_targets = false
+blur_renut_texture_pool = false
+banjo_renut_stream_redeem = false
+blur_renut_wipe_overwritten = true
+banjo_renut_kick_reuse = false
+banjo_async_present = false
+blur_small_alloc_mb = 0
+audio_xma_kick_without_lock = false
+
+# Fixed 720p (no dynamic scaling on PC)
+banjo_renut_dynamic_resolution = false
+banjo_renut_dynamic_resolution_handheld = false
+banjo_renut_dynamic_resolution_docked = false
+banjo_renut_render_height_handheld = 720
+banjo_renut_render_height_docked = 720
+banjo_renut_display_height_docked = 720

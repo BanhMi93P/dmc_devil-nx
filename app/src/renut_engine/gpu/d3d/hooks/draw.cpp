@@ -49,9 +49,8 @@ using namespace renut::gpu;
 namespace {
 
 constexpr u32 kE_OUTOFMEMORY = 0x8007000Eu;
-// D3DVIEWPORT9 {0, 0, 0xFFFF, 0xFFFF, 0.0, 1.0} in N&B's data (unk_82001744):
-// the whole surface.
-constexpr u32 kFullViewport = 0x8227C190;
+// D3DVIEWPORT9 {0, 0, 0xFFFF, 0xFFFF, 0.0, 1.0} in DmC TU1 data (Base 0x8227C190 -> TU1 0x8227B880).
+constexpr u32 kFullViewport = 0x8227B880;
 // D3DRS_HIZWRITEENABLE's index in the render state table.
 constexpr u32 kRenderStateHiZWriteEnable = 97;
 
@@ -799,22 +798,22 @@ void QueueHostResolve(u32 device, u32 flags, const ClearRect *rect,
 
 } // namespace
 
-DMC_RENUT_HOOK(sub_8253A440,
+DMC_RENUT_HOOK(sub_8253A4B0,
                D3DDevice_DrawVertices_hook); // D3DDevice_DrawVertices
 DMC_RENUT_HOOK(
-    sub_8253A858,
+    sub_8253A8C8,
     D3DDevice_DrawIndexedVertices_hook); // D3DDevice_DrawIndexedVertices
-DMC_RENUT_HOOK(sub_82539E08,
+DMC_RENUT_HOOK(sub_82539E78,
                D3DDevice_DrawVerticesUP_hook); // D3DDevice_DrawVerticesUP
-DMC_RENUT_HOOK(sub_82539948,
+DMC_RENUT_HOOK(sub_825399B8,
                D3DDevice_BeginVertices_hook); // D3DDevice_BeginVertices
 DMC_RENUT_HOOK(
-    sub_8253A390,
+    sub_8253A400,
     D3DDevice_EndVertices_hook); // D3DDevice_EndVertices / EndIndexedVertices
 
 // void D3DDevice_DrawIndexedVerticesUP(...) [sub_8253A3A0]:
 // VertexStreamZeroStride in caller's stack at +84.
-DMC_RENUT_HOOK_RAW(sub_8253A3A0) {
+DMC_RENUT_HOOK_RAW(sub_8253A410) {
   const u32 stride = LoadU32(ctx.r1.u32 + 84);
   D3DDevice_DrawIndexedVerticesUP_hook(ctx.r3.u32, ctx.r4.u32, ctx.r5.u32,
                                        ctx.r6.u32, ctx.r7.u32, ctx.r8.u32,
@@ -823,7 +822,7 @@ DMC_RENUT_HOOK_RAW(sub_8253A3A0) {
 
 // HRESULT D3DDevice_BeginIndexedVertices(...) [sub_82539E50]: ppVertexData in
 // caller's stack at +84.
-DMC_RENUT_HOOK_RAW(sub_82539E50) {
+DMC_RENUT_HOOK_RAW(sub_82539EC0) {
   const u32 pp_vertex_data = LoadU32(ctx.r1.u32 + 84);
   ctx.r3.u64 = D3DDevice_BeginIndexedVertices_hook(
       ctx.r3.u32, ctx.r4.u32, i32(ctx.r5.u32), ctx.r6.u32, ctx.r7.u32,
@@ -832,7 +831,7 @@ DMC_RENUT_HOOK_RAW(sub_82539E50) {
 
 // void D3DDevice_ClearF(...) [sub_82537818]: Z in f1 (r7's slot), Stencil in
 // r8.
-DMC_RENUT_HOOK_RAW(sub_82537818) {
+DMC_RENUT_HOOK_RAW(sub_82537888) {
   const u32 device = ctx.r3.u32, flags = ctx.r4.u32, rect_va = ctx.r5.u32,
             color_va = ctx.r6.u32;
   ClearRect rect;
@@ -842,12 +841,12 @@ DMC_RENUT_HOOK_RAW(sub_82537818) {
     ReadVector4(color_va, color);
   QueueHostClear(device, flags, has_rect ? &rect : nullptr, color,
                  float(ctx.f1.f64), ctx.r8.u32);
-  __imp__sub_82537818(ctx, base);
+  __imp__sub_82537888(ctx, base);
 }
 
 // void D3DDevice_Resolve(...) [sub_8253F260]: ClearZ in f1, ClearStencil at
 // +92.
-DMC_RENUT_HOOK_RAW(sub_8253F260) {
+DMC_RENUT_HOOK_RAW(sub_8253F2D0) {
   const u32 device = ctx.r3.u32, flags = ctx.r4.u32, rect_va = ctx.r5.u32,
             dest_texture = ctx.r6.u32;
   const u32 point_va = ctx.r7.u32, dest_level = ctx.r8.u32,
@@ -863,5 +862,5 @@ DMC_RENUT_HOOK_RAW(sub_8253F260) {
   QueueHostResolve(device, flags, has_rect ? &rect : nullptr, dest_texture,
                    dest_x, dest_y, dest_level, dest_slice, color_va,
                    float(ctx.f1.f64), clear_stencil);
-  __imp__sub_8253F260(ctx, base);
+  __imp__sub_8253F2D0(ctx, base);
 }

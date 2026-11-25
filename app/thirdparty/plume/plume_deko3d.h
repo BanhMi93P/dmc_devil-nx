@@ -178,6 +178,8 @@ namespace plume {
         // sasrt-nx (2026-11-08, Deko3DOptions::trackedReadWait): the fragment-wait epoch of its last write (bound as a target,
         // cleared, copied or resolved into, decompressed); 0: never.
         mutable uint64_t writtenWaitEpoch = 0;
+        // DmC #10/#54: compressed RT dirtied by GPU write since last DkInvalidateFlags_Image drop.
+        mutable bool dirtySinceDrop = true;
         // sasrt-nx (2026-11-08, Deko3DOptions::preciseDepthResolve): a compressed depth image may hold compressed tiles
         // written since its last decompression (true until one: nothing known). Set where the GPU writes it (a draw that
         // writes depth or stencil, a clear, a copy, upload, blit or resolve into it), cleared by dkCmdBufResolveDepthValues
@@ -407,6 +409,7 @@ namespace plume {
         DkColorWriteState colorWrite{};
         DkBlendState blend[8]{};
         uint32_t blendWords[8][7]{}; // the IndependentBlend registers written again (deko3d 0.5.0's FuncAlphaDst)
+        uint32_t blendWordsMask = 0; // DmC #15/#60: bit i set when target i enables blend with dstAlpha != dstColor
         DkDepthStencilState depthStencil{};
         uint8_t stencilReadMask = 0xFF, stencilWriteMask = 0xFF, stencilReference = 0;
         float depthBias = 0.0f, depthBiasClamp = 0.0f, slopeScaledDepthBias = 0.0f;
@@ -671,6 +674,21 @@ namespace plume {
         // last Full barrier, are not ordered without the barrier).
         bool copyRunFenced = false;
         uint32_t sampleMaskSet = 0xFFFFFFFFu;  // port 166: the mask last recorded (none yet in this list)
+        // DmC #15/#60, #16: state dedupe & push coalescing (reset in begin()).
+        bool viewportValid = false;
+        uint64_t boundViewportHash = 0;
+        bool scissorValid = false;
+        uint64_t boundScissorHash = 0;
+        bool depthBiasValid = false;
+        float boundDepthBias = 0.0f, boundDepthBiasClamp = 0.0f, boundSlopeScaledDepthBias = 0.0f;
+        bool stencilRefValid = false;
+        uint32_t boundStencilRef = 0;
+        uint8_t boundSrgbState = 0xFFu; // 0xFF = unknown, else bit 0
+        bool targetsNeedRebind = false;
+        uint32_t lastPushAt = 0;
+        uint32_t lastPushSize = 0;
+        uint8_t lastPushData[64]{};
+        void ensureTargetsBound();
         void flushBarriers() {
             flushBarriersRaw();
             copyRunFenced = false;
@@ -809,6 +827,8 @@ namespace plume {
         std::mutex codeMutex;
         std::vector<std::pair<DkMemBlock, uint32_t>> codeBlocks; // block, used
         std::atomic<uint64_t> codeEpoch{1}; // advances with each code load (command lists invalidate the shader cache)
+        std::atomic<uint64_t> submittedDescEpoch{0}; // DmC #11/#55: descriptor epoch seen at last queue submit
+        std::atomic<uint64_t> submittedCodeEpoch{0}; // DmC #11/#55: code epoch seen at last queue submit
         std::unordered_map<uint64_t, std::unique_ptr<Deko3DShaderVariant>> variants; // by variant source hash
         std::mutex variantMutex;
 
@@ -1404,6 +1424,12 @@ namespace plume {
         // LostOdysseyRecomp's profile). Nothing on the CPU reads a descriptor after the epoch: the epoch only decides an
         // invalidate in the list being recorded, and the GPU sees the stores after the submission's system call.
         bool relaxedDescriptorCounters = true;
+        // DmC-NX GPU batch flags:
+        bool lazyDecompressOpt = true;
+        bool stateDedupe = true;
+        bool safeReadBarriers = true;
+        bool pushCoalesce = true;
+        bool uploadBarrierBatch = true;
     };
     // sasrt-nx (2026-11-08, Deko3DOptions::dataOnlyInvalidate): plume's own invalidate bit, above deko3d's flags.
     constexpr uint32_t Deko3DDataInvalidate = 1u << 30;

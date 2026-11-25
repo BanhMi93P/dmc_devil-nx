@@ -94,9 +94,8 @@ REXCVAR_DEFINE_BOOL(banjo_renut_core_layout, false, "Banjo/Enhancements",
 using namespace renut::gpu;
 
 // Kernel exports the device code uses.
-// katamari-nx: Beautiful Katamari's GetCurrentThreadId is sub_824C1C10 (`lwz r11,256(r13); lwz r3,332(r11); blr`,
-// N&B's rex_GetCurrentThreadId 0x8220F1E0 byte for byte).
-REX_IMPORT(__imp__sub_824C1C10, GuestGetCurrentThreadId, u32());
+// DmC TU1 (0.0.1.7): GetCurrentThreadId is sub_831EE930 (`lwz r11,256(r13); lwz r3,332(r11); blr`).
+REX_IMPORT(__imp__sub_831EE930, GuestGetCurrentThreadId, u32());
 REX_IMPORT(__imp__RtlInitializeCriticalSection, RtlInitializeCriticalSection, void(u32));
 REX_IMPORT(__imp__KeQueryPerformanceFrequency, KeQueryPerformanceFrequency, u32());
 REX_IMPORT(__imp__KeGetCurrentProcessType, KeGetCurrentProcessType, u32());
@@ -139,7 +138,7 @@ constexpr u32 kDeviceOffsetsMinusOne[] = {21968, 21972, 15340};
 constexpr u32 kDeviceTypeNoHardware = 2;
 // Copied from the global qword at kGlobalQwordVa into every device.
 constexpr u32 kDeviceOffsetGlobalQword = 11008;
-constexpr u32 kGlobalQwordVa = 0x835DCB50;
+constexpr u32 kGlobalQwordVa = 0x835DCB60;
 // Hardware-path fields: two critical sections, QueryPerformanceFrequency and
 // its reciprocal as floats, and 41 words set to -1.
 constexpr u32 kDeviceOffsetCriticalSection0 = 15348;
@@ -1050,7 +1049,7 @@ void D3DDevice_InsertCallback_hook(u32 device, u32 /*type*/, u32 callback, u32 c
 
 constexpr u32 kDeviceOffsetReferenceCount = 0x3C;
 constexpr u32 kDeviceOffsetOwnerThread = 0x2A88;
-constexpr u32 kDeviceCapsVa = 0x820FC1F8;  // N&B's constant D3DCAPS9 (katamari-nx: 0x82161B30->0x820FC1F8)
+constexpr u32 kDeviceCapsVa = 0x820FCA68;  // N&B's constant D3DCAPS9 (katamari-nx: 0x82161B30->0x820FC1F8)
 constexpr u32 kDeviceCapsSize = 0x130;
 // katamari-nx: XDK 2.0.5632 has no D3D_IsFusion and no such word (N&B's 0x82DC67D4); 0 = not a Fusion GPU.
 constexpr u32 kFusionVa = 0;      // non-zero on a Fusion GPU
@@ -1398,9 +1397,9 @@ BANJO_RENUT_HOOK(sub_824E03D0, IsFencePending_hook);  // D3DDevice_IsFencePendin
 // DmC device, ring, sync, fence & query hooks (XDK 21119)
 // ---------------------------------------------------------------------------
 
-REX_EXTERN(__imp__sub_82535A00);  // Direct3D_CreateDevice, the original
-REX_EXTERN(__imp__sub_825448C0);  // D3D::InitializePresentationParameters (CDevice*, D3DPRESENT_PARAMETERS*)
-REX_EXTERN(__imp__sub_825445E0);  // D3D::InitializeApiState (CDevice*)
+REX_EXTERN(__imp__sub_82535A70);  // Direct3D_CreateDevice, the original
+REX_EXTERN(__imp__sub_82544930);  // D3D::InitializePresentationParameters (CDevice*, D3DPRESENT_PARAMETERS*)
+REX_EXTERN(__imp__sub_82544650);  // D3D::InitializeApiState (CDevice*)
 
 namespace {
 
@@ -1430,7 +1429,7 @@ void DmcCreateDevice(PPCContext &ctx, uint8_t *base) {
   // Create DmC's no-hardware device using its own CreateDevice so all XDK 21119
   // private structures are initialized natively by DmC.
   ctx.r4.u64 = kDeviceTypeNoHardware;
-  __imp__sub_82535A00(ctx, base);
+  __imp__sub_82535A70(ctx, base);
   if (ctx.r3.u32 != 0)
     return;
   const u32 device_va = LoadGuestU32(out_va);
@@ -1462,7 +1461,7 @@ void DmcCreateDevice(PPCContext &ctx, uint8_t *base) {
     if (present_parameters) {
       ctx.r3.u64 = device_va;
       ctx.r4.u64 = present_parameters;
-      __imp__sub_825448C0(ctx, base);
+      __imp__sub_82544930(ctx, base);
       if (!ctx.r3.u32) {
         RGPU_ERROR("Direct3D_CreateDevice: InitializePresentationParameters failed");
         ctx.r3.u64 = kE_OUTOFMEMORY;
@@ -1470,7 +1469,7 @@ void DmcCreateDevice(PPCContext &ctx, uint8_t *base) {
       }
     }
     ctx.r3.u64 = device_va;
-    __imp__sub_825445E0(ctx, base);
+    __imp__sub_82544650(ctx, base);
     native::RewindRing(d);
     bytes[kDeviceOffsetFlags2] &= u8(~kDeviceFlagImmediateFences);
     Video::SetGuestDevice(device_va);
@@ -1487,23 +1486,23 @@ void DmcSynchronizeToPresentationInterval_hook(u32 device_va, u32 /*immediate*/)
 
 }  // namespace
 
-DMC_RENUT_HOOK_RAW(sub_82535A00) {  // Direct3D_CreateDevice
+DMC_RENUT_HOOK_RAW(sub_82535A70) {  // Direct3D_CreateDevice
   DmcCreateDevice(ctx, base);
 }
-DMC_RENUT_HOOK(sub_825383C8, DmcSynchronizeToPresentationInterval_hook);  // D3D_SynchronizeToPresentationInterval
-DMC_RENUT_HOOK(sub_82540448, KickOff_hook);                            // D3D_CDevice_KickOff
-DMC_RENUT_HOOK(sub_8253FA30, KickOffSegment_hook);                     // D3D_CDevice_KickOffSegment
-DMC_RENUT_HOOK(sub_8253F298, BeginRingBig_hook);                       // D3D_CDevice_BeginRingBig
-DMC_RENUT_HOOK(sub_8253F890, RingBufferDeviceAllocate_hook);           // D3D_RingBufferDeviceAllocate
-DMC_RENUT_HOOK(sub_8253F660, AllocateInlineData_hook);                 // D3D_CDevice_AllocateInlineData
-DMC_RENUT_HOOK(sub_82540FF0, D3DDevice_SetRingBufferParameters_hook);  // D3DDevice_SetRingBufferParameters
-DMC_RENUT_HOOK(sub_82539118, D3DDevice_Swap_hook);                     // D3DDevice_Swap
-DMC_RENUT_HOOK(sub_82540978, BlockOnFence_hook);                       // D3D_CDevice_BlockOnFence
-DMC_RENUT_HOOK(sub_82535600, CBlocker_Check_hook);                     // D3D_CBlocker_Check
-DMC_RENUT_HOOK(sub_82540EF0, IsFencePending_hook);                     // D3DDevice_IsFencePending
+DMC_RENUT_HOOK(sub_82538438, DmcSynchronizeToPresentationInterval_hook);  // D3D_SynchronizeToPresentationInterval
+DMC_RENUT_HOOK(sub_825404B8, KickOff_hook);                            // D3D_CDevice_KickOff
+DMC_RENUT_HOOK(sub_8253FAA0, KickOffSegment_hook);                     // D3D_CDevice_KickOffSegment
+DMC_RENUT_HOOK(sub_8253F308, BeginRingBig_hook);                       // D3D_CDevice_BeginRingBig
+DMC_RENUT_HOOK(sub_8253F900, RingBufferDeviceAllocate_hook);           // D3D_RingBufferDeviceAllocate
+DMC_RENUT_HOOK(sub_8253F6D0, AllocateInlineData_hook);                 // D3D_CDevice_AllocateInlineData
+DMC_RENUT_HOOK(sub_82541060, D3DDevice_SetRingBufferParameters_hook);  // D3DDevice_SetRingBufferParameters
+DMC_RENUT_HOOK(sub_82539188, D3DDevice_Swap_hook);                     // D3DDevice_Swap
+DMC_RENUT_HOOK(sub_825409E8, BlockOnFence_hook);                       // D3D_CDevice_BlockOnFence
+DMC_RENUT_HOOK(sub_82535670, CBlocker_Check_hook);                     // D3D_CBlocker_Check
+DMC_RENUT_HOOK(sub_82540F60, IsFencePending_hook);                     // D3DDevice_IsFencePending
 
 // D3D Query emulation (Occlusion / Event / Timestamps)
-DMC_RENUT_HOOK_RAW(sub_8253B5E0) {  // IDirect3DQuery9::Issue
+DMC_RENUT_HOOK_RAW(sub_8253B650) {  // IDirect3DQuery9::Issue
   const u32 query_va = ctx.r3.u32;
   const u32 flags = ctx.r4.u32;
   if (query_va) {
@@ -1515,7 +1514,7 @@ DMC_RENUT_HOOK_RAW(sub_8253B5E0) {  // IDirect3DQuery9::Issue
   ctx.r3.u64 = 0;  // S_OK
 }
 
-DMC_RENUT_HOOK_RAW(sub_8253B890) {  // IDirect3DQuery9::GetData
+DMC_RENUT_HOOK_RAW(sub_8253B900) {  // IDirect3DQuery9::GetData
   const u32 query_va = ctx.r3.u32;
   const u32 data_va = ctx.r4.u32;
   const u32 size = ctx.r5.u32;

@@ -17,7 +17,10 @@
 
 #include "imgui.h"
 #include "renut_engine/overlays/app_imgui.h"  // renut-ultimate (port 66)
+#include "renut_engine/perf/frame_stats.h"
 #include "profiler/profiler.h"
+
+extern "C" bool RexSwitchPerfStacksActive(void);
 
 REXCVAR_DECLARE(bool, banjo_show_profiler);
 
@@ -85,6 +88,8 @@ class ProfilerOverlayDialog : public rex::ui::ImGuiDialog {
         threads_age_ = 0.0f;
         const std::string threads = banjo::profiler::ThreadCpuUsage();
         if (!threads.empty()) last_threads_ = threads;
+        const auto pcpu = banjo::profiler::SampleProcessCpu();
+        if (pcpu.valid) last_process_cpu_ = pcpu;
       }
       if (!last_threads_.empty() && ImGui::TreeNode("Thread CPU use")) {
         ImGui::TextWrapped("%s", last_threads_.c_str());
@@ -93,6 +98,39 @@ class ProfilerOverlayDialog : public rex::ui::ImGuiDialog {
     }
     ImGui::End();
     if (!open) rex::cvar::SetFlagByName("banjo_show_profiler", "false");
+
+    // Window 2 (bottom-left): UnleashedRecomp / Renut-NX detailed Frame Pacing, Vblanks, Process CPU% & Wait breakdown.
+    const auto pacing = renut::frame_stats::GetPacingSnapshot();
+    ImGui::SetNextWindowSize(ImVec2(560.0f, 0.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2(12.0f, io.DisplaySize.y - 12.0f), ImGuiCond_FirstUseEver, ImVec2(0.0f, 1.0f));
+    ImGui::SetNextWindowBgAlpha(0.78f);
+    if (ImGui::Begin("Profiler (DmC - Devil May Cry)", nullptr, ImGuiWindowFlags_NoSavedSettings)) {
+      ImGui::Text("Frame pacing (last %d game frames)", pacing.count);
+      ImGui::Text("best %5.2f ms | median %5.2f ms | worst %5.2f ms", pacing.best_ms, pacing.median_ms, pacing.worst_ms);
+      ImGui::Text("average FPS: %5.1f | 1%% low FPS: %5.1f", pacing.avg_fps, pacing.low_1pct_fps);
+      ImGui::Text("vblanks per frame (16.7ms): 1:%d  2:%d  3:%d  4:%d  5+:%d",
+                  pacing.vblanks[0], pacing.vblanks[1], pacing.vblanks[2], pacing.vblanks[3], pacing.vblanks[4]);
+      ImGui::Text("Stutters (>2x median): %d | Hitches (>45 ms): %d", pacing.stutters, pacing.hitches);
+      if (last_process_cpu_.valid) {
+        ImGui::Text("Process CPU (all threads): %5.1f%% of one core, %5.1f%% of the four",
+                    last_process_cpu_.pct_one_core, last_process_cpu_.pct_four_cores);
+      } else {
+        ImGui::TextDisabled("Process CPU (all threads): n/a");
+      }
+      ImGui::Separator();
+      ImGui::Text("Game thread CPU (active)   %6.2f ms  (avg %6.2f ms)", pacing.cur_cpu_active_ms, pacing.avg_cpu_active_ms);
+      ImGui::Text("Game waiting for fences    %6.2f ms  (avg %6.2f ms)", pacing.cur_wait_ms[0], pacing.avg_wait_ms[0]);
+      ImGui::Text("Game waiting for Swap      %6.2f ms  (avg %6.2f ms)", pacing.cur_wait_ms[1], pacing.avg_wait_ms[1]);
+      ImGui::Text("Game waiting for display   %6.2f ms  (avg %6.2f ms)", pacing.cur_wait_ms[2], pacing.avg_wait_ms[2]);
+      ImGui::Text("Game waiting for limiter   %6.2f ms  (avg %6.2f ms)", pacing.cur_wait_ms[3], pacing.avg_wait_ms[3]);
+      ImGui::Text("Render thread              %6.2f ms  (avg %6.2f ms)", pacing.cur_render_ms, pacing.avg_render_ms);
+      ImGui::Text("GPU Frame                  %6.2f ms  (avg %6.2f ms)", pacing.cur_gpu_ms, pacing.avg_gpu_ms);
+      ImGui::Separator();
+      const bool stacks_on = RexSwitchPerfStacksActive();
+      ImGui::TextColored(stacks_on ? ImVec4(0.35f, 1.0f, 0.35f, 1.0f) : ImVec4(0.65f, 0.65f, 0.65f, 1.0f),
+                         "Stack profiler (perfil_pilas.flag): %s", stacks_on ? "ON" : "off");
+    }
+    ImGui::End();
   }
 
  private:
@@ -162,5 +200,6 @@ class ProfilerOverlayDialog : public rex::ui::ImGuiDialog {
   std::array<std::array<float, kHistoryCount>, kSeriesCount> history_{};
   size_t index_ = 0;
   std::string last_threads_;
+  banjo::profiler::ProcessCpuSample last_process_cpu_{};
   float threads_age_ = 0.0f;
 };

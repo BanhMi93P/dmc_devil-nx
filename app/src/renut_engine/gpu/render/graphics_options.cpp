@@ -13,108 +13,167 @@
 #include "renut_engine/gpu/guest/widescreen.h"
 #include "renut_engine/gpu/render/format.h"
 
-REXCVAR_DEFINE_STRING(renut_shadow_resolution, "Resolution", "Nuts&Bolts/Graphics",
-                      "Shadow map resolution, as a multiple of the console's: Resolution follows "
-                      "renut_resolution; 1x is the console's; 2x, 3x and 4x are sharper.")
+REXCVAR_DEFINE_STRING(
+    renut_shadow_resolution, "Resolution", "Nuts&Bolts/Graphics",
+    "Shadow map resolution, as a multiple of the console's: Resolution follows "
+    "renut_resolution; 1x is the console's; 2x, 3x and 4x are sharper.")
     .allowed({"Resolution", "1x", "2x", "3x", "4x"});
 
 REXCVAR_DEFINE_STRING(renut_ambient_occlusion, "Half", "Nuts&Bolts/Graphics",
-                      "Ambient occlusion (SSAO) resolution: Half the screen's, as on the console, "
+                      "Ambient occlusion (SSAO) resolution: Half the screen's, "
+                      "as on the console, "
                       "or Full.")
     .allowed({"Half", "Full"});
 
-// rr6-nx (2026-11-22, the user: "make a separate toggle for handheld and docked dynamic resolution make sure handheld
-// drs is off by default and docked is on by default 972p to 1080p"): one switch for each mode
-// (banjo_renut_dynamic_resolution_handheld / _docked, the game menu's rows); this one, the switch for both before, still
-// sets both when a toml sets it and they are not set themselves (DynamicModeOn).
-REXCVAR_DEFINE_BOOL(banjo_renut_dynamic_resolution, false, "Nuts&Bolts/Graphics",
-                    "Dynamic resolution for both modes (2026-10-28, the user's request), the switch before "
-                    "banjo_renut_dynamic_resolution_handheld / _docked (2026-11-22): set in a toml, it sets both of "
+// rr6-nx (2026-11-22, the user: "make a separate toggle for handheld and docked
+// dynamic resolution make sure handheld drs is off by default and docked is on
+// by default 972p to 1080p"): one switch for each mode
+// (banjo_renut_dynamic_resolution_handheld / _docked, the game menu's rows);
+// this one, the switch for both before, still sets both when a toml sets it and
+// they are not set themselves (DynamicModeOn).
+REXCVAR_DEFINE_BOOL(banjo_renut_dynamic_resolution, false,
+                    "Nuts&Bolts/Graphics",
+                    "Dynamic resolution for both modes (2026-10-28, the user's "
+                    "request), the switch before "
+                    "banjo_renut_dynamic_resolution_handheld / _docked "
+                    "(2026-11-22): set in a toml, it sets both of "
                     "them, unless the toml sets them too. Not set: they decide")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
-REXCVAR_DEFINE_BOOL(banjo_renut_dynamic_resolution_handheld, false, "Nuts&Bolts/Graphics",
-                    "Dynamic resolution in handheld mode (not pixel-identical while it acts; off by default, the "
-                    "user's choice of 2026-11-22): the 3D image between banjo_renut_dynamic_handheld_low and _high (in "
-                    "place of banjo_renut_render_height_handheld, the fixed handheld resolution): lower while the "
-                    "GPU's time a frame is above banjo_renut_dynamic_gpu_ms, higher again when the next height would "
-                    "fit. On deko3d from the next frame (the game menu's row); on the PC's back ends read at start, and "
+REXCVAR_DEFINE_BOOL(banjo_renut_dynamic_resolution_handheld, false,
+                    "Nuts&Bolts/Graphics",
+                    "Dynamic resolution in handheld mode (not pixel-identical "
+                    "while it acts; off by default, the "
+                    "user's choice of 2026-11-22): the 3D image between "
+                    "banjo_renut_dynamic_handheld_low and _high (in "
+                    "place of banjo_renut_render_height_handheld, the fixed "
+                    "handheld resolution): lower while the "
+                    "GPU's time a frame is above banjo_renut_dynamic_gpu_ms, "
+                    "higher again when the next height would "
+                    "fit. On deko3d from the next frame (the game menu's row); "
+                    "on the PC's back ends read at start, and "
                     "one end of the range must be 720 lines there");
-REXCVAR_DEFINE_BOOL(banjo_renut_dynamic_resolution_docked, true, "Nuts&Bolts/Graphics",
-                    "Dynamic resolution in docked mode (not pixel-identical while it acts; on by default, 972 to 1080 "
-                    "lines, the user's choice of 2026-11-22): the 3D image between banjo_renut_dynamic_docked_low and "
-                    "_high (in place of banjo_renut_render_height_docked, the fixed docked resolution), as "
-                    "banjo_renut_dynamic_resolution_handheld does in handheld mode");
-REXCVAR_DEFINE_INT32(banjo_renut_dynamic_handheld_low, 540, "Nuts&Bolts/Graphics",
-                     "banjo_renut_dynamic_resolution_handheld: the handheld range's low height (a multiple of 9)")
+REXCVAR_DEFINE_BOOL(
+    banjo_renut_dynamic_resolution_docked, false, "Nuts&Bolts/Graphics",
+    "Dynamic resolution in docked mode (not pixel-identical while it acts; off "
+    "by default in DmC, 720p "
+    "fixed default; 972 to 1080 when enabled): the 3D image between "
+    "banjo_renut_dynamic_docked_low and "
+    "_high (in place of banjo_renut_render_height_docked, the fixed docked "
+    "resolution), as "
+    "banjo_renut_dynamic_resolution_handheld does in handheld mode");
+REXCVAR_DEFINE_INT32(banjo_renut_dynamic_handheld_low, 480,
+                     "Nuts&Bolts/Graphics",
+                     "banjo_renut_dynamic_resolution_handheld: the handheld "
+                     "range's low height (a multiple of 9)")
     .range(360, 1080)
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
-REXCVAR_DEFINE_INT32(banjo_renut_dynamic_handheld_high, 720, "Nuts&Bolts/Graphics",
-                     "banjo_renut_dynamic_resolution_handheld: the handheld range's high height")
+REXCVAR_DEFINE_INT32(
+    banjo_renut_dynamic_handheld_high, 720, "Nuts&Bolts/Graphics",
+    "banjo_renut_dynamic_resolution_handheld: the handheld range's high height")
     .range(360, 1080)
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
-REXCVAR_DEFINE_INT32(banjo_renut_dynamic_docked_low, 972, "Nuts&Bolts/Graphics",
-                     "banjo_renut_dynamic_resolution_docked: the docked range's low height (972 = 1728x972 by default, "
-                     "the user's choice of 2026-11-22; 720 before)")
+REXCVAR_DEFINE_INT32(banjo_renut_dynamic_docked_low, 720, "Nuts&Bolts/Graphics",
+                     "banjo_renut_dynamic_resolution_docked: the docked "
+                     "range's low height (720 = 1280x720 by default)")
     .range(360, 1080)
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
-REXCVAR_DEFINE_INT32(banjo_renut_dynamic_docked_high, 1080, "Nuts&Bolts/Graphics",
-                     "banjo_renut_dynamic_resolution_docked: the docked range's high height (a multiple of 9; 1080 is the "
+REXCVAR_DEFINE_INT32(banjo_renut_dynamic_docked_high, 1080,
+                     "Nuts&Bolts/Graphics",
+                     "banjo_renut_dynamic_resolution_docked: the docked "
+                     "range's high height (a multiple of 9; 1080 is the "
                      "docked display's own size, 900 before night_gpu5)")
     .range(360, 1080)
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
-REXCVAR_DEFINE_INT32(banjo_renut_dynamic_steps, 4, "Nuts&Bolts/Graphics",
-                     "banjo_renut_dynamic_resolution (night_gpu5, the user's request): heights between each range's low "
-                     "and high, evenly spaced (multiples of 36: 576 612 648 684 handheld 540-720; 1008 1044 docked "
-                     "972-1080); the "
-                     "GPU's time picks the highest that fits. 0: only the two ends")
+REXCVAR_DEFINE_INT32(
+    banjo_renut_dynamic_steps, 4, "Nuts&Bolts/Graphics",
+    "banjo_renut_dynamic_resolution (night_gpu5, the user's request): heights "
+    "between each range's low "
+    "and high, evenly spaced (multiples of 36: 576 612 648 684 handheld "
+    "540-720; 1008 1044 docked "
+    "972-1080); the "
+    "GPU's time picks the highest that fits. 0: only the two ends")
     .range(0, 8)
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
-// sasrt-nx (2026-11-09, the user: "more steps, especially in docked"): each mode's grid of heights (a multiple of 9:
-// whole host pixels across the 1280-wide screen). 36 (banjo's) is whole pixels at 320x180 too; 18 at 640x360, and a
-// quarter-size target's edge then rounds to the nearest pixel (RenderScale::Coord), half a pixel off at most.
-// vivapinata-nx (2026-11-12, the owner: 6 steps, then "Yes, port the grid"): 540-720 has room for only 4 heights on 36
-// lines; Viva's built-in settings take 18 handheld (app/vivapinata_switch_defaults.toml).
-REXCVAR_DEFINE_INT32(sasrt_dynamic_lines_handheld, 36, "Nuts&Bolts/Graphics",
-                     "banjo_renut_dynamic_resolution: the handheld steps are multiples of this many lines (9 to 72, a "
-                     "multiple of 9; 36 banjo's; from sasrt-nx)")
+// sasrt-nx (2026-11-09, the user: "more steps, especially in docked"): each
+// mode's grid of heights (a multiple of 9: whole host pixels across the
+// 1280-wide screen). 36 (banjo's) is whole pixels at 320x180 too; 18 at
+// 640x360, and a quarter-size target's edge then rounds to the nearest pixel
+// (RenderScale::Coord), half a pixel off at most. vivapinata-nx (2026-11-12,
+// the owner: 6 steps, then "Yes, port the grid"): 540-720 has room for only 4
+// heights on 36 lines; Viva's built-in settings take 18 handheld
+// (app/vivapinata_switch_defaults.toml).
+REXCVAR_DEFINE_INT32(sasrt_dynamic_lines_handheld, 18, "Nuts&Bolts/Graphics",
+                     "banjo_renut_dynamic_resolution: the handheld steps are "
+                     "multiples of this many lines (9 to 72, a "
+                     "multiple of 9; 18 for 480-720; from sasrt-nx)")
     .range(9, 72)
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 REXCVAR_DEFINE_INT32(sasrt_dynamic_lines_docked, 36, "Nuts&Bolts/Graphics",
-                     "banjo_renut_dynamic_resolution: the docked steps are multiples of this many lines (9 to 72, a "
+                     "banjo_renut_dynamic_resolution: the docked steps are "
+                     "multiples of this many lines (9 to 72, a "
                      "multiple of 9; 36 banjo's; from sasrt-nx)")
     .range(9, 72)
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 REXCVAR_DEFINE_DOUBLE(banjo_renut_dynamic_up_s, 1.0, "Nuts&Bolts/Graphics",
-                      "banjo_renut_dynamic_resolution: seconds in a row the high height must be predicted to fit (and "
-                      "since the last change) before it is taken again (0.1 to 600; 1 = quick, the user's choice)")
+                      "banjo_renut_dynamic_resolution: seconds in a row the "
+                      "high height must be predicted to fit (and "
+                      "since the last change) before it is taken again (0.1 to "
+                      "600; 1 = quick, the user's choice)")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
-// banjo-nx (2026-10-28): 34.5 (the user's choice; a decimal key since then), 40 before.
-REXCVAR_DEFINE_DOUBLE(banjo_renut_dynamic_gpu_ms, 34.5, "Nuts&Bolts/Graphics",
-                      "banjo_renut_dynamic_resolution: the GPU's time a frame (ms, a moving average) above which the low "
+// banjo-nx (2026-10-28): 34.5 (the user's choice; a decimal key since then), 40
+// before.
+REXCVAR_DEFINE_DOUBLE(banjo_renut_dynamic_gpu_ms, 32.5, "Nuts&Bolts/Graphics",
+                      "banjo_renut_dynamic_resolution: the GPU's time a frame "
+                      "(ms, a moving average) above which the low "
                       "height is taken (10 to 200)")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 REXCVAR_DEFINE_INT32(banjo_renut_dynamic_test_s, 0, "Nuts&Bolts/Graphics",
-                     "banjo_renut_dynamic_resolution test: alternate the two heights every N seconds whatever the load "
+                     "banjo_renut_dynamic_resolution test: alternate the two "
+                     "heights every N seconds whatever the load "
                      "(0: by the GPU's time)")
     .range(0, 600)
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 REXCVAR_DEFINE_INT32(banjo_renut_anisotropy_cap, 0, "Nuts&Bolts/Graphics",
-                     "NOT pixel-identical (2026-10-28, GPU block, the user's call): the most anisotropic filtering any "
-                     "texture gets: 0 the game's own (as on the Xbox 360), 1 none, 2/4/8 at most that ratio. The "
-                     "heaviest shaders read 14-21 textures a pixel; a high ratio multiplies each read. Compare runs "
+                     "NOT pixel-identical (2026-10-28, GPU block, the user's "
+                     "call): the most anisotropic filtering any "
+                     "texture gets: 0 the game's own (as on the Xbox 360), 1 "
+                     "none, 2/4/8 at most that ratio. The "
+                     "heaviest shaders read 14-21 textures a pixel; a high "
+                     "ratio multiplies each read. Compare runs "
                      "with and without it (the renderer's GPU ms)")
     .range(0, 16)
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
-REXCVAR_DEFINE_STRING(renut_anisotropic_filtering, "Game", "Nuts&Bolts/Graphics",
-                      "Anisotropic texture filtering: the game's own, or at least 2x, 4x, 8x or "
-                      "16x.")
+REXCVAR_DEFINE_STRING(
+    renut_anisotropic_filtering, "Game", "Nuts&Bolts/Graphics",
+    "Anisotropic texture filtering: the game's own, or at least 2x, 4x, 8x or "
+    "16x.")
     .allowed({"Game", "2x", "4x", "8x", "16x"});
 
-REXCVAR_DEFINE_STRING(renut_post_process_precision, "High", "Nuts&Bolts/Graphics",
-                      "Precision of the bloom, depth of field and SSAO buffers: Game keeps the "
-                      "console's 8 bits (faint glow shows as blobs sliding over dark areas), High "
-                      "uses 16 bits.")
+#if defined(PLUME_DEKO3D)
+constexpr const char *kDefaultPostProcessPrecision = "Game";
+#else
+constexpr const char *kDefaultPostProcessPrecision = "High";
+#endif
+
+REXCVAR_DEFINE_STRING(
+    renut_post_process_precision, kDefaultPostProcessPrecision,
+    "Nuts&Bolts/Graphics",
+    "Precision of the bloom, depth of field and SSAO buffers: Game keeps the "
+    "console's 8 bits (faint glow shows as blobs sliding over dark areas), "
+    "High "
+    "uses 16 bits.")
     .allowed({"Game", "High"});
+
+REXCVAR_DEFINE_STRING(dmc_env_shadows, "0.67x", "Nuts&Bolts/Graphics",
+                      "DmC environment/CSM shadow map resolution scale "
+                      "(1344x1344 D24S8): 1.0x, 0.67x, or Off.")
+    .allowed({"1.0x", "0.67x", "Off"});
+
+REXCVAR_DEFINE_STRING(
+    dmc_char_shadows, "0.67x", "Nuts&Bolts/Graphics",
+    "DmC character/NPC local shadow map resolution scale (1024x688 / 512x344 "
+    "D24S8): 1.0x, 0.67x, or Off.")
+    .allowed({"1.0x", "0.67x", "Off"});
 
 namespace renut::gpu {
 
@@ -129,13 +188,24 @@ constexpr u32 kAmbientOcclusionEdramBase = 1864;
 constexpr u32 kGuestScreenHeight = 720;
 
 bool IsShadowMap(const d3d::SurfaceDesc &desc, u32 width, u32 height) {
+  if ((u32(desc.Format) & 0x3F) == kFormatD24S8)
+    return true;
   if (width != height)
     return false;
-  if ((u32(desc.Format) & 0x3F) == kFormatD24S8)
-    return width == 512 || width == 768 || width == 1024;
   // The local lights' depth, converted for their atlas.
   return !d3d::IsDepthFormat(desc.Format) && width == 512 &&
-         GpuColorFormat((u32(desc.ColorInfo) >> 16) & 0xF) == GpuColorFormat::Fmt16_16_Float;
+         GpuColorFormat((u32(desc.ColorInfo) >> 16) & 0xF) ==
+             GpuColorFormat::Fmt16_16_Float;
+}
+
+bool IsDmCEnvShadow(const d3d::SurfaceDesc &desc, u32 width, u32 height) {
+  return (u32(desc.Format) & 0x3F) == kFormatD24S8 && width == height &&
+         width >= 1024;
+}
+
+bool IsDmCCharShadow(const d3d::SurfaceDesc &desc, u32 width, u32 height) {
+  return (u32(desc.Format) & 0x3F) == kFormatD24S8 &&
+         !(width == height && width >= 1024);
 }
 
 bool IsAmbientOcclusion(const d3d::SurfaceDesc &desc, u32 width, u32 height) {
@@ -149,8 +219,14 @@ bool IsAmbientOcclusion(const d3d::SurfaceDesc &desc, u32 width, u32 height) {
 // the screen; rendered at a higher scale, the buffers keep detail those taps
 // step over, so edges come out as ghost copies rather than blurred.
 bool IsPostProcessBuffer(const d3d::SurfaceDesc &desc, u32 width, u32 height) {
-  return !d3d::IsDepthFormat(desc.Format) && width * 4 <= GuestScreenWidth() &&
-         height * 4 <= kGuestScreenHeight;
+  if (d3d::IsDepthFormat(desc.Format))
+    return false;
+  // Keep UE3 3D Color Grading LUT strips (e.g. 16x512) and tiny 1D/LUT targets at 1x so
+  // stacked 3D LUT resolves (16x16x16) never mismatch scale and corrupt colors at 540p/480p.
+  if (width <= 64 && height <= 1024)
+    return true;
+  // Quarter-screen post buffers (include UE3 322x182 padded bloom/DOF targets).
+  return width * 4 <= GuestScreenWidth() + 16 && height * 4 <= kGuestScreenHeight + 16;
 }
 
 // Half the screen or less, single-sampled, 8_8_8_8: the bloom's bright pass
@@ -158,9 +234,11 @@ bool IsPostProcessBuffer(const d3d::SurfaceDesc &desc, u32 width, u32 height) {
 bool IsLowPrecisionPostTarget(const d3d::SurfaceDesc &desc) {
   const u32 width = d3d::SurfaceWidth(desc.Size);
   const u32 height = d3d::SurfaceHeight(desc.Size);
-  return !d3d::IsDepthFormat(desc.Format) && ((u32(desc.SurfaceInfo) >> 16) & 3) == 0 &&
+  return !d3d::IsDepthFormat(desc.Format) &&
+         ((u32(desc.SurfaceInfo) >> 16) & 3) == 0 &&
          width * 2 <= GuestScreenWidth() && height * 2 <= kGuestScreenHeight &&
-         GpuColorFormat((u32(desc.ColorInfo) >> 16) & 0xF) == GpuColorFormat::Fmt8_8_8_8;
+         GpuColorFormat((u32(desc.ColorInfo) >> 16) & 0xF) ==
+             GpuColorFormat::Fmt8_8_8_8;
 }
 
 // The options as LatchGraphicsOptionsLocked last read them: the draw path
@@ -169,51 +247,99 @@ bool IsLowPrecisionPostTarget(const d3d::SurfaceDesc &desc) {
 struct Latched {
   bool shadow_follows_resolution = true;
   RenderScale shadow_scale;
+  RenderScale env_shadow_scale;
+  RenderScale char_shadow_scale;
+  bool env_shadows_off = false;
+  bool char_shadows_off = false;
   bool full_ambient_occlusion = false;
   uint32_t min_anisotropy = 1;
   bool high_precision_post = true;
 };
 Latched g_latched;
 
+RenderScale DecodeDmCShadowScale(const std::string &v, bool &is_off) {
+  is_off = (v == "Off");
+  if (v == "0.67x" || v == "0.5x" || v == "Off")
+    return RenderScale{1};
+  return RenderScale{0};
+}
+
 } // namespace
 
-void LatchGraphicsOptionsLocked() {
+bool LatchGraphicsOptionsLocked() {
+  const Latched prev = g_latched;
   const std::string &shadows = REXCVAR_GET(renut_shadow_resolution);
-  g_latched.shadow_follows_resolution = shadows == "Resolution" || shadows.empty();
+  g_latched.shadow_follows_resolution =
+      shadows == "Resolution" || shadows.empty();
   g_latched.shadow_scale = {};
   if (!g_latched.shadow_follows_resolution)
-    RenderScale::FromRatio(uint32_t(std::atoi(shadows.c_str())), 1, g_latched.shadow_scale);
-  g_latched.full_ambient_occlusion = REXCVAR_GET(renut_ambient_occlusion) == "Full";
-  // banjo-nx (2026-10-18): deko3d draws every target at the console's scale (its shaders are made for 1x, pass scale1
-  // of tools/deko3d_glsl_opt.py): shadow maps follow the resolution (1x) and the ambient occlusion is the game's.
-  // banjo-nx (2026-10-21, internal resolution): the 3D image at 648p or 900p (and the menus at 1080p docked): the shadow
-  // maps stay at the console's size (1x, the game's shadows; not 0.9x), the ambient occlusion the game's.
+    RenderScale::FromRatio(uint32_t(std::atoi(shadows.c_str())), 1,
+                           g_latched.shadow_scale);
+  g_latched.full_ambient_occlusion =
+      REXCVAR_GET(renut_ambient_occlusion) == "Full";
+  g_latched.env_shadow_scale = DecodeDmCShadowScale(
+      REXCVAR_GET(dmc_env_shadows), g_latched.env_shadows_off);
+  g_latched.char_shadow_scale = DecodeDmCShadowScale(
+      REXCVAR_GET(dmc_char_shadows), g_latched.char_shadows_off);
+  // banjo-nx (2026-10-18): deko3d draws every target at the console's scale
+  // (its shaders are made for 1x, pass scale1 of tools/deko3d_glsl_opt.py):
+  // ambient occlusion stays the game's, while DmC shadows use dmc_env_shadows /
+  // dmc_char_shadows.
   if (IsDeko3D()) {
     g_latched.shadow_follows_resolution = false;
     g_latched.shadow_scale = {};
     g_latched.full_ambient_occlusion = false;
   }
-  const int anisotropy = std::atoi(REXCVAR_GET(renut_anisotropic_filtering).c_str());
+  const int anisotropy =
+      std::atoi(REXCVAR_GET(renut_anisotropic_filtering).c_str());
   g_latched.min_anisotropy = anisotropy >= 2 ? uint32_t(anisotropy) : 1;
-  g_latched.high_precision_post = REXCVAR_GET(renut_post_process_precision) != "Game";
+  g_latched.high_precision_post =
+      REXCVAR_GET(renut_post_process_precision) != "Game";
+  return prev.env_shadow_scale != g_latched.env_shadow_scale ||
+         prev.char_shadow_scale != g_latched.char_shadow_scale ||
+         prev.env_shadows_off != g_latched.env_shadows_off ||
+         prev.char_shadows_off != g_latched.char_shadows_off ||
+         prev.high_precision_post != g_latched.high_precision_post;
 }
 
-RenderScale SurfaceRenderScale(const d3d::SurfaceDesc &desc, RenderScale resolution) {
+bool IsShadowDrawingSuppressed(u32 format_word, u32 width, u32 height) {
+  if ((format_word & 0x3F) != kFormatD24S8)
+    return false;
+  return (width == height && width >= 1024) ? g_latched.env_shadows_off
+                                            : g_latched.char_shadows_off;
+}
+
+bool IsShadowDrawingSuppressed(const d3d::SurfaceDesc &depth_desc) {
+  return IsShadowDrawingSuppressed(u32(depth_desc.Format),
+                                   d3d::SurfaceWidth(depth_desc.Size),
+                                   d3d::SurfaceHeight(depth_desc.Size));
+}
+
+RenderScale SurfaceRenderScale(const d3d::SurfaceDesc &desc,
+                               RenderScale resolution) {
   if ((u32(desc.SurfaceInfo) >> 16) & 3)
-    return resolution;  // multisampled: the scene's
+    return resolution; // multisampled: the scene's
   const u32 width = d3d::SurfaceWidth(desc.Size);
   const u32 height = d3d::SurfaceHeight(desc.Size);
+  if (IsDeko3D() && (u32(desc.Format) & 0x3F) == kFormatD24S8) {
+    return IsDmCEnvShadow(desc, width, height) ? g_latched.env_shadow_scale
+                                               : g_latched.char_shadow_scale;
+  }
   if (IsShadowMap(desc, width, height))
-    return g_latched.shadow_follows_resolution ? resolution : g_latched.shadow_scale;
-  if (g_latched.full_ambient_occlusion && IsAmbientOcclusion(desc, width, height))
+    return g_latched.shadow_follows_resolution ? resolution
+                                               : g_latched.shadow_scale;
+  if (g_latched.full_ambient_occlusion &&
+      IsAmbientOcclusion(desc, width, height))
     return resolution.Times(2);
   if (IsPostProcessBuffer(desc, width, height))
-    return {};  // the console's
-  // banjo-nx (2026-10-21, package 36z2): a depth target of a quarter of the screen or less goes with the colour targets
-  // of that size (the post-processing buffers' rule, which takes colour only): a 128x128 one at 0.9x under its 128x128
-  // colour target at 1x cut its draws to 115x115 (console log of 36z: ten draws a frame).
-  if (IsDeko3D() && d3d::IsDepthFormat(desc.Format) && width * 4 <= GuestScreenWidth() &&
-      height * 4 <= kGuestScreenHeight)
+    return {}; // the console's
+  // banjo-nx (2026-10-21, package 36z2): a depth target of a quarter of the
+  // screen or less goes with the colour targets of that size (the
+  // post-processing buffers' rule, which takes colour only): a 128x128 one at
+  // 0.9x under its 128x128 colour target at 1x cut its draws to 115x115
+  // (console log of 36z: ten draws a frame).
+  if (IsDeko3D() && d3d::IsDepthFormat(desc.Format) &&
+      width * 4 <= GuestScreenWidth() && height * 4 <= kGuestScreenHeight)
     return {};
   return resolution;
 }
@@ -226,17 +352,21 @@ plume::RenderFormat SurfaceColorFormat(const d3d::SurfaceDesc &desc) {
   return ColorTargetFormat(GpuColorFormat((u32(desc.ColorInfo) >> 16) & 0xF));
 }
 
-// rr6-nx (2026-11-22): banjo_renut_dynamic_resolution, set in a toml, sets both modes' keys that the toml does not set
-// (once, at the first call: the renderer's first latch).
+// rr6-nx (2026-11-22): banjo_renut_dynamic_resolution, set in a toml, sets both
+// modes' keys that the toml does not set (once, at the first call: the
+// renderer's first latch).
 static void DynamicLegacyOnce() {
   static bool done = false;
   if (done)
     return;
   done = true;
-  if (rex::cvar::GetFlagSource("banjo_renut_dynamic_resolution") == rex::cvar::Source::kDefault)
+  if (rex::cvar::GetFlagSource("banjo_renut_dynamic_resolution") ==
+      rex::cvar::Source::kDefault)
     return;
-  const char *on = REXCVAR_GET(banjo_renut_dynamic_resolution) ? "true" : "false";
-  for (const char *key : {"banjo_renut_dynamic_resolution_handheld", "banjo_renut_dynamic_resolution_docked"}) {
+  const char *on =
+      REXCVAR_GET(banjo_renut_dynamic_resolution) ? "true" : "false";
+  for (const char *key : {"banjo_renut_dynamic_resolution_handheld",
+                          "banjo_renut_dynamic_resolution_docked"}) {
     if (rex::cvar::GetFlagSource(key) == rex::cvar::Source::kDefault)
       rex::cvar::SetFlagByName(key, on);
   }
@@ -246,12 +376,15 @@ bool DynamicModeOn(bool docked) {
   return docked ? REXCVAR_GET(banjo_renut_dynamic_resolution_docked)
                 : REXCVAR_GET(banjo_renut_dynamic_resolution_handheld);
 }
-bool DynamicResolutionOn() { return DynamicModeOn(false) || DynamicModeOn(true); }
+bool DynamicResolutionOn() {
+  return DynamicModeOn(false) || DynamicModeOn(true);
+}
 int32_t DynamicHeight(bool docked, bool high) {
-  static const int32_t v[4] = {int32_t(REXCVAR_GET(banjo_renut_dynamic_handheld_low)),
-                               int32_t(REXCVAR_GET(banjo_renut_dynamic_handheld_high)),
-                               int32_t(REXCVAR_GET(banjo_renut_dynamic_docked_low)),
-                               int32_t(REXCVAR_GET(banjo_renut_dynamic_docked_high))};
+  static const int32_t v[4] = {
+      int32_t(REXCVAR_GET(banjo_renut_dynamic_handheld_low)),
+      int32_t(REXCVAR_GET(banjo_renut_dynamic_handheld_high)),
+      int32_t(REXCVAR_GET(banjo_renut_dynamic_docked_low)),
+      int32_t(REXCVAR_GET(banjo_renut_dynamic_docked_high))};
   return v[(docked ? 2 : 0) + (high ? 1 : 0)];
 }
 double DynamicUpSeconds() {
@@ -272,7 +405,9 @@ int32_t DynamicSteps() {
   static const int32_t v = int32_t(REXCVAR_GET(banjo_renut_dynamic_steps));
   return v < 0 ? 0 : v > 8 ? 8 : v;
 }
-int32_t DynamicStepLines(bool docked) {  // sasrt-nx (2026-11-09): sasrt_dynamic_lines_handheld / _docked
+int32_t
+DynamicStepLines(bool docked) { // sasrt-nx (2026-11-09):
+                                // sasrt_dynamic_lines_handheld / _docked
   static const int32_t h = int32_t(REXCVAR_GET(sasrt_dynamic_lines_handheld));
   static const int32_t d = int32_t(REXCVAR_GET(sasrt_dynamic_lines_docked));
   const int32_t v = (docked ? d : h) / 9 * 9;
@@ -284,8 +419,6 @@ uint32_t AnisotropyCap() {
   return value > 0 ? uint32_t(value) : 0u;
 }
 
-uint32_t MinAnisotropy() {
-  return g_latched.min_anisotropy;
-}
+uint32_t MinAnisotropy() { return g_latched.min_anisotropy; }
 
 } // namespace renut::gpu

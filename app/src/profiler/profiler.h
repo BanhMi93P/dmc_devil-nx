@@ -53,4 +53,12 @@ std::string RendererDevice();
 // Per-thread CPU use ("name 12.3%" entries) on the Switch; empty elsewhere.
 std::string ThreadCpuUsage();
 
+// Total process CPU usage across all registered threads over the interval since the previous call.
+struct ProcessCpuSample {
+  bool valid = false;
+  double pct_one_core = 0.0;
+  double pct_four_cores = 0.0;
+};
+ProcessCpuSample SampleProcessCpu();
+
 }  // namespace banjo::profiler

@@ -77,10 +77,10 @@ REX_INPUT_MAP_CVARS(p4, "Player 4");
 
 // blur-nx (2026-11-18, the user: "add an option to the config please exposed to the user to change the button config
 // combo to open the menu"): the game menu's buttons (DispatchMenuShortcuts), and the gate in Poll follows them.
-REXCVAR_DEFINE_STRING(input_menu_combo, "A+B+X+Y+L+R", "Input",
+REXCVAR_DEFINE_STRING(input_menu_combo, "PLUS+MINUS", "Input",
                       "The Switch buttons that open the game menu, held together: two or more of A B X Y L R ZL ZR PLUS "
-                      "MINUS LSTICK RSTICK UP DOWN LEFT RIGHT SL SR, joined by + (for example \"L+R+MINUS\"). A name "
-                      "not known, or a single button, keeps A+B+X+Y+L+R. While two or more of its L, R, ZL and ZR are "
+                      "MINUS LSTICK RSTICK UP DOWN LEFT RIGHT SL SR, joined by + (for example \"PLUS+MINUS\"). A name "
+                      "not known, or a single button, keeps PLUS+MINUS. While two or more of its L, R, ZL and ZR are "
                       "held, its other buttons do not reach the game");
 
 // Single Joy-Cons (one per player, for multiplayer) are held sideways: the system is told so (it then turns the

@@ -331,10 +331,12 @@ namespace plume {
         case RenderFormat::R32G32_SINT: return DkImageFormat_RG32_Sint;
         case RenderFormat::R8G8B8A8_TYPELESS:
         case RenderFormat::R8G8B8A8_UNORM: return DkImageFormat_RGBA8_Unorm;
+        case RenderFormat::R8G8B8A8_UNORM_SRGB: return DkImageFormat_RGBA8_Unorm_sRGB;
         case RenderFormat::R8G8B8A8_UINT: return DkImageFormat_RGBA8_Uint;
         case RenderFormat::R8G8B8A8_SNORM: return DkImageFormat_RGBA8_Snorm;
         case RenderFormat::R8G8B8A8_SINT: return DkImageFormat_RGBA8_Sint;
         case RenderFormat::B8G8R8A8_UNORM: return DkImageFormat_BGRA8_Unorm;
+        case RenderFormat::B8G8R8A8_UNORM_SRGB: return DkImageFormat_BGRA8_Unorm_sRGB;
         case RenderFormat::R16G16_TYPELESS:
         case RenderFormat::R16G16_FLOAT: return DkImageFormat_RG16_Float;
         case RenderFormat::R16G16_UNORM: return DkImageFormat_RG16_Unorm;
@@ -3224,6 +3226,8 @@ namespace plume {
                 s.alphaBlendOp = toDk(b.blendOpAlpha);
                 s.srcAlphaBlendFactor = toDkAlpha(b.srcBlendAlpha);
                 s.dstAlphaBlendFactor = toDkAlpha(b.dstBlendAlpha);
+                if (s.dstAlphaBlendFactor != s.dstColorBlendFactor)
+                    p->blendWordsMask |= 1u << i;
                 for (RenderBlend f : {b.srcBlend, b.dstBlend, b.srcBlendAlpha, b.dstBlendAlpha})
                     p->usesBlendConstant = p->usesBlendConstant || f == RenderBlend::BLEND_FACTOR || f == RenderBlend::INV_BLEND_FACTOR;
             }
@@ -3294,6 +3298,8 @@ namespace plume {
                 const RenderInputElement &el = desc.inputElements[e];
                 if (el.location != vin[a])
                     continue;
+                if (el.slotIndex >= 16)
+                    break;  // kZeroStreamSlot (16) has no deko3d vertex buffer slot; keep st.isFixed = 1
                 DkVtxAttribSize size;
                 DkVtxAttribType type;
                 bool bgra;

@@ -333,6 +333,7 @@ TargetGM107::getLatency(const Instruction *insn) const
    case OP_MUL:
    case OP_NOT:
    case OP_OR:
+   case OP_PERMT:
    case OP_PREEX2:
    case OP_PRESIN:
    case OP_QUADOP:

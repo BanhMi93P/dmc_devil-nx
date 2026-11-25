@@ -18,6 +18,7 @@
 // katamari-nx: N&B's title update is not part of this port (Beautiful Katamari has no title update in the user's
 // files). The DLC installer is (2026-10-31, the user's 16 DLC packages): reNut upstream's, game-agnostic.
 #include "renut_engine/dlc_install.h"
+#include "dmc_startup_overlay.h"
 #include "profiler/profiler.h"
 #include "profiler/profiler_overlay.h"
 #include "game_menu.h"  // blur-nx (2026-11-18): the game menu (A+B+X+Y+L+R, F8)
@@ -138,6 +139,8 @@ public:
         // asks for no ImGui frame while closed (WantsFrame), so the drawer builds none for it then.
         game_menu_ = std::make_unique<blur::GameMenuDialog>(drawer, config_path(), [this] { return runtime(); },
                                                             [this] { return immediate_drawer(); });
+        startup_dialog_ = std::make_unique<dmc::DmCStartupDialog>(
+            drawer, [this] { return immediate_drawer(); });
 #if !REX_PLATFORM_SWITCH
         path_wizard_ = new PathSetupWizard(drawer);
         drawer->AddDialog(path_wizard_);
@@ -279,6 +282,10 @@ public:
         // ImGui::IsAnyMouseDown (~GameMenuDialog -> ~ImGuiDialog -> ImGuiDrawer::ClearInput). The game menu first, as
         // Peggle's fix; the overlays the same way. OnDestroy runs this on the UI thread, where the overlay pump records
         // them (app_integration.cpp); port 159's close path runs it on a worker while the UI thread waits for it.
+        if (startup_dialog_) {
+            startup_dialog_->Stop();
+            startup_dialog_.reset();
+        }
         game_menu_.reset();
         profiler_dialog_.reset();
         fps_dialog_.reset();
@@ -300,7 +307,21 @@ public:
     // A game_root folder next to the executable is used when no path was given.
     // On the Switch that is sdmc:/switch/katamari-nx/game_root (the extracted disc).
     void OnConfigurePaths(rex::PathConfig& paths) override {
-        const auto folder = rex::filesystem::GetExecutableFolder();
+        auto sanitize_switch_path = [](std::filesystem::path p) {
+#if REX_PLATFORM_SWITCH
+            std::string s = rex::path_to_utf8(p);
+            if (s.rfind("sdmc:/", 0) == 0) {
+                std::filesystem::path rooted = rex::to_path(s.substr(5));
+                std::error_code rec;
+                if (std::filesystem::exists(rooted, rec)) {
+                    return rooted;
+                }
+            }
+#endif
+            return p;
+        };
+
+        const auto folder = sanitize_switch_path(rex::filesystem::GetExecutableFolder());
         std::error_code ec;
 #if defined(KATAMARI_BUILTIN_CONFIG)
         // The player's settings file. Not renut.toml: the test builds' full one, left on an SD card, would override
@@ -309,21 +330,75 @@ public:
             paths.config_path = folder / "dmc_devil.toml";
         }
 #endif
-        if (paths.game_data_root.empty() && !folder.empty()) {
-            for (const char* dir : {"game", "game_root"}) {
-                const auto candidate = folder / dir;
+        if (!paths.game_data_root.empty()) {
+            paths.game_data_root = sanitize_switch_path(paths.game_data_root);
+        }
+        if (paths.game_data_root.empty()) {
+            const std::filesystem::path game_candidates[] = {
+                folder.empty() ? std::filesystem::path() : (folder / "game"),
+                folder.empty() ? std::filesystem::path() : (folder / "game_root"),
+#if REX_PLATFORM_SWITCH
+                std::filesystem::path("/switch/dmc_devil/game"),
+                std::filesystem::path("/switch/dmc_devil/game_root"),
+#endif
+            };
+            for (const auto& candidate : game_candidates) {
+                if (candidate.empty()) {
+                    continue;
+                }
+                ec.clear();
                 if (std::filesystem::is_directory(candidate, ec)) {
                     paths.game_data_root = candidate;
                     break;
                 }
             }
         }
-        if (paths.update_data_root.empty() && !folder.empty()) {
-            for (const char* dir : {"Update", "update"}) {
-                const auto candidate = folder / dir;
-                if (std::filesystem::is_directory(candidate, ec) && !std::filesystem::is_empty(candidate, ec)) {
+        if (!paths.user_data_root.empty()) {
+            paths.user_data_root = sanitize_switch_path(paths.user_data_root);
+        }
+        if (!paths.update_data_root.empty()) {
+            paths.update_data_root = sanitize_switch_path(paths.update_data_root);
+        }
+        if (paths.update_data_root.empty()) {
+            const std::filesystem::path update_candidates[] = {
+                folder.empty() ? std::filesystem::path() : (folder / "Update"),
+                folder.empty() ? std::filesystem::path() : (folder / "update"),
+                paths.game_data_root.empty() ? std::filesystem::path() : (paths.game_data_root / "Update"),
+                paths.game_data_root.empty() ? std::filesystem::path() : (paths.game_data_root / "update"),
+#if REX_PLATFORM_SWITCH
+                std::filesystem::path("/switch/dmc_devil/Update"),
+                std::filesystem::path("/switch/dmc_devil/update"),
+#endif
+            };
+            auto has_default_xexp = [&ec](const std::filesystem::path& dir) {
+                ec.clear();
+                if (std::filesystem::is_regular_file(dir / "default.xexp", ec)) {
+                    return true;
+                }
+                ec.clear();
+                return std::filesystem::is_regular_file(dir / "DEFAULT.XEXP", ec);
+            };
+            for (const auto& candidate : update_candidates) {
+                if (candidate.empty()) {
+                    continue;
+                }
+                ec.clear();
+                if (std::filesystem::is_directory(candidate, ec) && has_default_xexp(candidate)) {
                     paths.update_data_root = candidate;
                     break;
+                }
+            }
+            if (paths.update_data_root.empty()) {
+                for (const auto& candidate : update_candidates) {
+                    if (candidate.empty()) {
+                        continue;
+                    }
+                    ec.clear();
+                    if (std::filesystem::is_directory(candidate, ec) &&
+                        !rex::filesystem::ListFiles(candidate).empty()) {
+                        paths.update_data_root = candidate;
+                        break;
+                    }
                 }
             }
         }
@@ -362,6 +437,22 @@ public:
         std::function<void(rex::PathConfig)> resume) override
     {
         StartRenutRenderer();
+        if (startup_dialog_) {
+            startup_dialog_->Begin(
+                defaults,
+                [this, resume](rex::PathConfig resolved) {
+                    renut::dlc::SetUserDataRoot(resolved.user_data_root);
+                    app_context().CallInUIThreadDeferred(
+                        [resume, resolved = std::move(resolved)]() mutable {
+                            resume(std::move(resolved));
+                        });
+                },
+                [this]() {
+                    app_context().CallInUIThreadDeferred(
+                        [this]() { app_context().QuitFromUIThread(); });
+                });
+            return std::nullopt;
+        }
         return rex::ReXApp::OnFinalizePaths(defaults, std::move(resume));
     }
 #endif
@@ -375,4 +466,5 @@ private:
     std::unique_ptr<FpsOverlayDialog> fps_dialog_;
     std::unique_ptr<ProfilerOverlayDialog> profiler_dialog_;
     std::unique_ptr<blur::GameMenuDialog> game_menu_;  // blur-nx (2026-11-18)
+    std::unique_ptr<dmc::DmCStartupDialog> startup_dialog_;
 };

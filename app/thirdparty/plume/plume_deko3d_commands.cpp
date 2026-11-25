@@ -273,6 +273,10 @@ namespace plume {
         framebuffer = nullptr;
         depthDirty = false;  // sasrt-nx (2026-10-21)
         viewportCount = scissorCount = 0;
+        viewportValid = scissorValid = depthBiasValid = stencilRefValid = false;
+        boundSrgbState = 0xFFu;
+        targetsNeedRebind = false;
+        lastPushSize = 0;
         indexAddress = 0;
         boundIndexFormat = DkIdxFormat_Uint16;
         boundRestart = 1;  // sasrt-nx (2026-10-30)
@@ -297,8 +301,14 @@ namespace plume {
         graphicsUboValid |= 1u << TexSizeUboSlot;
         boundImageSetObj = nullptr;
         texSizeValid = 0;
-        // Whatever the GPU holds of descriptors and shader code from before is dropped.
-        dkCmdBufBarrier(cmd, DkBarrier_None, DkInvalidateFlags_Descriptors | DkInvalidateFlags_Shader);
+        // DmC #11/#55: Only invalidate Descriptors / Shader caches if epochs advanced since last submitted list.
+        const uint64_t initDesc = device->descriptorEpoch.load(std::memory_order_relaxed);
+        const uint64_t initCode = device->codeEpoch.load(std::memory_order_relaxed);
+        const uint32_t initInv =
+            (initDesc != device->submittedDescEpoch.load(std::memory_order_relaxed) ? uint32_t(DkInvalidateFlags_Descriptors) : 0u) |
+            (initCode != device->submittedCodeEpoch.load(std::memory_order_relaxed) ? uint32_t(DkInvalidateFlags_Shader) : 0u);
+        if (initInv)
+            dkCmdBufBarrier(cmd, DkBarrier_None, initInv);
         // sasrt-nx (2026-11-08, Deko3DOptions::tiledCache): on (or off again once it has been on: the A/B halves).
         {
             static bool everOn = false;
@@ -414,7 +424,7 @@ namespace plume {
                     (l == RenderTextureLayout::SHADER_READ || l == RenderTextureLayout::DEPTH_READ ||
                      l == RenderTextureLayout::GENERAL || l == RenderTextureLayout::COPY_SOURCE ||
                      l == RenderTextureLayout::RESOLVE_SOURCE))
-                    resolvePendingDepth(t, true);
+                    resolvePendingDepth(t, !Deko3DGetOptions().lazyDecompressOpt);
             }
         }
         if (framebuffer && framebuffer->hasDepth && framebuffer->depthCompressed && Deko3DGetOptions().depthResolve) {
@@ -527,11 +537,16 @@ namespace plume {
                 // sasrt-nx (2026-11-08, Deko3DOptions::trackedImageInvalidate): only a texture sampled since the last
                 // drop can have lines in the cache.
                 const Deko3DTexture *t = static_cast<const Deko3DTexture *>(textureBarriers[i].texture);
-                const bool drop = !Deko3DGetOptions().trackedImageInvalidate || !t ||
-                                  t->sampledEpoch == g_deko3dTexDropEpoch.load(std::memory_order_relaxed);
-                if (drop)
+                bool drop = !Deko3DGetOptions().trackedImageInvalidate || !t ||
+                            t->sampledEpoch == g_deko3dTexDropEpoch.load(std::memory_order_relaxed);
+                // DmC #10/#54: Compressed render/depth targets dirtied since last drop must always invalidate Image cache.
+                if (!drop && Deko3DGetOptions().safeReadBarriers && t && t->compressed && t->dirtySinceDrop)
+                    drop = true;
+                if (drop) {
                     invalidate |= DkInvalidateFlags_Image;
-                else
+                    if (t)
+                        t->dirtySinceDrop = false;
+                } else
                     bumpRound(42);  // sasrt::gpu_round::kTexDropTracked: a read move without the drop
                 // sasrt-nx (2026-11-08, Deko3DOptions::trackedReadWait): the wait only for a texture written since the last
                 // wait, or with its drop due (which waits for the GPU's earlier work).
@@ -785,11 +800,15 @@ namespace plume {
             return;
         const uint64_t now = g_deko3dWaitEpoch.load(std::memory_order_relaxed);
         for (uint32_t i = 0; i < framebuffer->colorCount; i++) {
-            if (const Deko3DTexture *t = framebuffer->colorTextures[i])
+            if (const Deko3DTexture *t = framebuffer->colorTextures[i]) {
                 t->writtenWaitEpoch = now;
+                t->dirtySinceDrop = true;
+            }
         }
-        if (framebuffer->hasDepth && framebuffer->depthTexture)
+        if (framebuffer->hasDepth && framebuffer->depthTexture) {
             framebuffer->depthTexture->writtenWaitEpoch = now;
+            framebuffer->depthTexture->dirtySinceDrop = true;
+        }
     }
 
     void Deko3DCommandList::markBoundSampled() {
@@ -942,10 +961,12 @@ namespace plume {
         if (!graphicsPipeline || !graphicsPipeline->valid)
             return;
         flushDescriptorInvalidate();
+        ensureTargetsBound();
         bindGraphicsBuffers();
         if (graphicsPipeline->boundTextures)
             bindTextures();
         flushBarriers();
+        lastPushSize = 0;
         noteDepthWrite();  // sasrt-nx (2026-11-08, preciseDepthResolve)
         noteUserClip();  // sasrt-nx (2026-11-08, sasrt_gpu_clip_spec)
         if (g_deko3dTrace)
@@ -972,10 +993,12 @@ namespace plume {
         if (!graphicsPipeline || !graphicsPipeline->valid || !indexAddress)
             return;
         flushDescriptorInvalidate();
+        ensureTargetsBound();
         bindGraphicsBuffers();
         if (graphicsPipeline->boundTextures)
             bindTextures();
         flushBarriers();
+        lastPushSize = 0;
         // sasrt-nx (2026-10-30, Deko3DOptions::stripRestart): a strip cut at the all-ones index, as on Vulkan.
         // sasrt-nx (2026-11-08, sasrt_gpu_export_list_topology): Deko3DSetNextPrimitive's, once
         const DkPrimitive prim = nextPrimitive ? DkPrimitive(nextPrimitive - 1) : graphicsPipeline->primitive;
@@ -1125,15 +1148,28 @@ namespace plume {
             if (p->blendCount && changed(4)) {
                 dkCmdBufBindBlendStates(cmd, 0, p->blend, p->blendCount);
                 // deko3d 0.5.0's FuncAlphaDst (see blendWords): the six registers of each target again.
-                for (uint32_t i = 0; i < p->blendCount; i++)
-                    dkCmdBufReplayCmds(cmd, p->blendWords[i], 7);
+                const bool dedupe = Deko3DGetOptions().stateDedupe;
+                for (uint32_t i = 0; i < p->blendCount; i++) {
+                    if (!dedupe || ((p->blendWordsMask >> i) & 1u))
+                        dkCmdBufReplayCmds(cmd, p->blendWords[i], 7);
+                }
             }
             if (changed(5))
                 dkCmdBufBindDepthStencilState(cmd, &p->depthStencil);
-            if (p->stencilEnabled && changed(6))
+            if (p->stencilEnabled && changed(6)) {
                 dkCmdBufSetStencil(cmd, DkFace_FrontAndBack, p->stencilWriteMask, p->stencilReference, p->stencilReadMask);
-            if (!p->dynamicDepthBias && changed(7))
+                boundStencilRef = p->stencilReference;
+                stencilRefValid = !p->dynamicStencilReference;
+            }
+            if (!p->dynamicDepthBias && changed(7)) {
                 dkCmdBufSetDepthBias(cmd, p->depthBias, p->depthBiasClamp, p->slopeScaledDepthBias);
+                boundDepthBias = p->depthBias;
+                boundDepthBiasClamp = p->depthBiasClamp;
+                boundSlopeScaledDepthBias = p->slopeScaledDepthBias;
+                depthBiasValid = true;
+            } else if (p->dynamicDepthBias) {
+                depthBiasValid = false;
+            }
             // Always, also with none: deko3d makes the attributes after the last one given constants and disables the
             // buffers after the last one, so a pipeline without vertex input leaves no earlier attribute fetching from
             // a buffer that may be gone. (banjo-nx: with the same attributes and buffers as bound, nothing to do.)
@@ -1295,6 +1331,15 @@ namespace plume {
         const uint32_t at = r.offset + offset;
         if (at + size > Deko3DDevice::PushSize)
             return;
+        if (Deko3DGetOptions().pushCoalesce && size > 0 && size <= sizeof(lastPushData)) {
+            if (lastPushSize == size && lastPushAt == at && memcmp(lastPushData, data, size) == 0)
+                return;
+            lastPushAt = at;
+            lastPushSize = size;
+            memcpy(lastPushData, data, size);
+        } else {
+            lastPushSize = 0;
+        }
         // Pipelined: draws before this one keep the old values (deko3d's push constants).
         dkCmdBufPushConstants(cmd, device->pushAddr, Deko3DDevice::PushSize, at, alignUp(size, 4), data);
     }
@@ -1382,8 +1427,21 @@ namespace plume {
         return u;
     }
 
+    static uint64_t hashBytes64(const void *data, size_t len) {
+        uint64_t h = 0xcbf29ce484222325ull;
+        const uint8_t *p = static_cast<const uint8_t *>(data);
+        for (size_t i = 0; i < len; ++i)
+            h = (h ^ p[i]) * 0x100000001b3ull;
+        return h;
+    }
+
     void Deko3DCommandList::setViewports(const RenderViewport *vps, uint32_t count) {
         count = std::min<uint32_t>(count, 16);
+        const uint64_t vh = count ? (hashBytes64(vps, sizeof(RenderViewport) * count) ^ count) : 0ull;
+        if (Deko3DGetOptions().stateDedupe && viewportValid && boundViewportHash == vh && viewportCount == count)
+            return;
+        boundViewportHash = vh;
+        viewportValid = true;
         bool flipped = false;
         for (uint32_t i = 0; i < count; i++) {
             const RenderViewport &v = vps[i];
@@ -1423,16 +1481,23 @@ namespace plume {
             s.width = uint32_t(std::max(r.right - std::max(r.left, 0), 0));
             s.height = uint32_t(std::max(r.bottom - std::max(r.top, 0), 0));
         }
+        const uint64_t sh = count ? (hashBytes64(scissors, sizeof(DkScissor) * count) ^ count) : 0ull;
+        if (Deko3DGetOptions().stateDedupe && scissorValid && boundScissorHash == sh && scissorCount == count)
+            return;
         scissorCount = count;
+        boundScissorHash = sh;
+        scissorValid = true;
         dkCmdBufSetScissors(cmd, 0, scissors, count);
     }
 
     void Deko3DCommandList::restoreScissors() {
-        if (scissorCount)
+        if (scissorCount) {
             dkCmdBufSetScissors(cmd, 0, scissors, scissorCount);
-        else {
+            scissorValid = true;
+        } else {
             const DkScissor all = {0, 0, 16384, 16384};
             dkCmdBufSetScissors(cmd, 0, &all, 1);
+            scissorValid = false;
         }
     }
 
@@ -1443,6 +1508,7 @@ namespace plume {
     }
 
     void Deko3DCommandList::setFramebuffer(const RenderFramebuffer *fb) {
+        targetsNeedRebind = false;
         // Bound every time: an application can free a framebuffer and make another at the same address.
         const Deko3DFramebuffer *f = static_cast<const Deko3DFramebuffer *>(fb);
         // sasrt-nx (2026-10-21, Deko3DOptions::depthResolve): a compressed depth target leaving the bind point is
@@ -1523,22 +1589,40 @@ namespace plume {
             colors[i] = &f->colors[i];
         flushBarriers();
         dkCmdBufBindRenderTargets(cmd, colors, f->colorCount, f->hasDepth ? &f->depth : nullptr);
-        writeFramebufferSrgb(cmd, f->colorCount && f->srgb[0]);
+        const uint8_t wantSrgb = (f->colorCount && f->srgb[0]) ? 1u : 0u;
+        if (!Deko3DGetOptions().stateDedupe || boundSrgbState != wantSrgb) {
+            writeFramebufferSrgb(cmd, wantSrgb != 0);
+            boundSrgbState = wantSrgb;
+        }
         boundTargetsSerial = f->serial;
     }
 
     void Deko3DCommandList::setDepthBias(float depthBias, float depthBiasClamp, float slopeScaledDepthBias) {
+        if (Deko3DGetOptions().stateDedupe && depthBiasValid &&
+            boundDepthBias == depthBias && boundDepthBiasClamp == depthBiasClamp &&
+            boundSlopeScaledDepthBias == slopeScaledDepthBias)
+            return;
+        boundDepthBias = depthBias;
+        boundDepthBiasClamp = depthBiasClamp;
+        boundSlopeScaledDepthBias = slopeScaledDepthBias;
+        depthBiasValid = true;
         dkCmdBufSetDepthBias(cmd, depthBias, depthBiasClamp, slopeScaledDepthBias);
         boundGroups[7] = 0;  // banjo-nx (2026-10-19): unknown for the next pipeline that sets a bias
     }
 
     void Deko3DCommandList::setStencilReference(uint32_t reference) {
+        const uint8_t ref8 = uint8_t(reference);
+        if (Deko3DGetOptions().stateDedupe && stencilRefValid && boundStencilRef == ref8)
+            return;
+        boundStencilRef = ref8;
+        stencilRefValid = true;
         const Deko3DGraphicsPipeline *p = graphicsPipeline;
-        dkCmdBufSetStencil(cmd, DkFace_FrontAndBack, p ? p->stencilWriteMask : 0xFF, uint8_t(reference), p ? p->stencilReadMask : 0xFF);
+        dkCmdBufSetStencil(cmd, DkFace_FrontAndBack, p ? p->stencilWriteMask : 0xFF, ref8, p ? p->stencilReadMask : 0xFF);
         boundGroups[6] = 0;  // banjo-nx (2026-10-19): unknown for the next pipeline that sets the stencil values
     }
 
     void Deko3DCommandList::clearColor(uint32_t attachmentIndex, RenderColor color, const RenderRect *rects, uint32_t rectsCount) {
+        ensureTargetsBound();
 #if defined(PLUME_DEKO3D_GUARDS)
         if (g_traceClears.fetch_add(1) < 40) {
             const Deko3DFramebuffer *f = framebuffer;
@@ -1577,6 +1661,7 @@ namespace plume {
     }
 
     void Deko3DCommandList::clearDepthStencil(bool clearDepth, bool clearStencil, float depthValue, uint32_t stencilValue, const RenderRect *rects, uint32_t rectsCount) {
+        ensureTargetsBound();
         if (rectsCount == 0) {
             const DkScissor all = {0, 0, 16384, 16384};
             dkCmdBufSetScissors(cmd, 0, &all, 1);
@@ -1669,6 +1754,7 @@ namespace plume {
             t->usedWaitEpoch = g_deko3dWaitEpoch.load(std::memory_order_relaxed);
             t->writtenWaitEpoch = t->usedWaitEpoch;  // sasrt-nx (2026-11-08, trackedReadWait): a write, or so taken
             t->sampledEpoch = g_deko3dTexDropEpoch.load(std::memory_order_relaxed);
+            t->dirtySinceDrop = true;
         }
     }
 
@@ -1843,11 +1929,32 @@ namespace plume {
         st.depthResolvesDeferred.store(st.depthResolvesDeferred.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
     }
 
+    void Deko3DCommandList::ensureTargetsBound() {
+        if (!targetsNeedRebind) [[likely]]
+            return;
+        targetsNeedRebind = false;
+        if (framebuffer) {
+            const DkImageView *colors[8];
+            for (uint32_t i = 0; i < framebuffer->colorCount; i++)
+                colors[i] = &framebuffer->colors[i];
+            dkCmdBufBindRenderTargets(cmd, colors, framebuffer->colorCount, framebuffer->hasDepth ? &framebuffer->depth : nullptr);
+            boundTargetsSerial = framebuffer->serial;
+        } else {
+            dkCmdBufBindRenderTargets(cmd, nullptr, 0, nullptr);
+            boundTargetsSerial = 0;
+        }
+    }
+
     void Deko3DCommandList::resolvePendingDepth(const Deko3DTexture *t, bool rebind) {
         if (!t->depthPending)
             return;
         t->depthPending = false;
-        flushBarriers();
+        const bool keepPending = Deko3DGetOptions().lazyDecompressOpt && Deko3DGetOptions().mergeBarriers &&
+                                 Deko3DGetOptions().decompressMerge && pendingBarrier && pendingBarrierMode != DkBarrier_Full;
+        if (!keepPending)
+            flushBarriers();
+        else
+            bumpRound(5);
         // renut-ultimate (2026-11-13, sasrt-nx's finding merging port 45): as resolveUnboundDepth. The texture used and
         // written now (trackedTargetWait, trackedReadWait: the read's barrier recorded next waits for this decompression);
         // work since the last fragment wait (leanBarrierSkip); the bound targets' serial dropped (sameTargetsKept: with no
@@ -1863,6 +1970,7 @@ namespace plume {
         dkCmdBufResolveDepthValues(cmd);
         t->depthUnresolved = false;
         if (rebind) {
+            targetsNeedRebind = false;
             if (framebuffer) {
                 const DkImageView *colors[8];
                 for (uint32_t i = 0; i < framebuffer->colorCount; i++)
@@ -1872,6 +1980,8 @@ namespace plume {
             }
             else
                 dkCmdBufBindRenderTargets(cmd, nullptr, 0, nullptr);
+        } else if (framebuffer) {
+            targetsNeedRebind = true;
         }
         Deko3DStats &st = GetDeko3DStats();
         st.depthResolvesLater.store(st.depthResolvesLater.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
@@ -2390,6 +2500,12 @@ namespace plume {
             if (cl && cl->list) {
                 dkQueueSubmitCommands(device->queue, cl->list);
                 checkQueue(device, "after a command list was submitted");  // port 167
+                uint64_t prevDesc = device->submittedDescEpoch.load(std::memory_order_relaxed);
+                while (cl->seenDescriptors > prevDesc &&
+                       !device->submittedDescEpoch.compare_exchange_weak(prevDesc, cl->seenDescriptors, std::memory_order_relaxed)) {}
+                uint64_t prevCode = device->submittedCodeEpoch.load(std::memory_order_relaxed);
+                while (cl->seenCode > prevCode &&
+                       !device->submittedCodeEpoch.compare_exchange_weak(prevCode, cl->seenCode, std::memory_order_relaxed)) {}
             }
         }
         if (signalFence) {

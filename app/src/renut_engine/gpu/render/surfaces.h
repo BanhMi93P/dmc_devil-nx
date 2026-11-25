@@ -150,6 +150,10 @@ struct HostSurface {
   // not look again.
   uint64_t blur_inherit_checked = 0;
 
+  // DmC #7: track whether stencil was modified by any draw/clear after ClearTargets.
+  uint32_t stencil_writes = 0;
+  uint32_t clear_stencil_value = 0;
+
   // gpu_profile labels of draws with it as the first target: color only,
   // color with depth, depth only. Made on first use.
   uint32_t profile_labels[3] = {UINT32_MAX, UINT32_MAX, UINT32_MAX};

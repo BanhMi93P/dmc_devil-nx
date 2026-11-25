@@ -27,6 +27,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <filesystem>
+#include <fstream>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -291,11 +292,9 @@ REXCVAR_DEFINE_INT32(banjo_renut_portrait_msaa_samples, 0, "Banjo/Enhancements",
 // Off by default: the shaders' code changes (a graphics-breaking key is off in the base; fnxf_xiii's own version once
 // overwrote a pixel shader's colour output, fixed here in all four moving passes), and another DKSH cache file
 // (deko3d_shaders.bin is the 1471 flags' only).
-REXCVAR_DEFINE_BOOL(banjo_deko3d_uam_pressure, false, "Banjo/Enhancements",
+REXCVAR_DEFINE_BOOL(banjo_deko3d_uam_pressure, true, "Banjo/Enhancements",
                     "deko3d: uam's register pressure passes (values computed at their first use, also across blocks; a "
-                    "shader still above 56 registers compiled again with rematerialisation and the hoist). fnxf_xiii: "
-                    "about 9 registers fewer on pixel shaders above 56, the 34 above 64 all at 64 or fewer. Another "
-                    "shader cache. false: as before")
+                    "shader still above threshold compiled again with rematerialisation and the hoist). Cache: deko3d_shaders.bin")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 REXCVAR_DEFINE_BOOL(banjo_deko3d_uam_wide_rows, true, "Banjo/Enhancements",
                     "deko3d renderer (2026-10-20, GPU): uam reads each bone row of tools/deko3d_glsl_opt.py's aw4 view "
@@ -310,14 +309,26 @@ REXCVAR_DEFINE_BOOL(banjo_renut_diag_null_ps, false, "Banjo/Diagnostics",
 // final composite pixel shader is in banjo_renut_smaa_after_ps (N&B's by default): a game that has not set its own runs
 // SMAA on no frame (the 10 s "SMAA ... frames" line says 0), and while SMAA is on the colour hand-over is off unless
 // sasrt_gpu_handover_with_smaa is on.
-REXCVAR_DEFINE_BOOL(banjo_renut_smaa, true, "Banjo/Enhancements",
+REXCVAR_DEFINE_BOOL(banjo_renut_smaa, false, "Banjo/Enhancements",
                     "SMAA 1x (2026-10-21, the user's request; Jimenez et al.'s SMAA, MIT: app/thirdparty/smaa): "
                     "anti-aliasing of the game's 3D image right after its final composite (a draw with one of the pixel "
                     "shaders of banjo_renut_smaa_after_ps), before the HUD is drawn over it, so the HUD and its text stay "
-                    "as they are. A copy and three full-screen passes at the target's size (luma edges, blending "
-                    "weights, neighbourhood blending; render/smaa.cpp); the in-run A/B target 19 measures its GPU time. "
-                    "It smooths the 3D image's edges: not the game's own picture. On by default in the base; a game "
-                    "lists its own composite in banjo_renut_smaa_after_ps, or SMAA runs on no frame");
+                    "as they are. Off by default in DmC (toggleable in +/- menu).")
+    ;
+// DmC-NX GPU & Shader Optimization Batch (audited #1-#60, all pixel-identical; default true for A/B).
+REXCVAR_DEFINE_BOOL(dmc_gpu_stencil_keep_readonly, true, "DmC/GPU", "A/B 256: readonly stencil test does not dirty depth target").lifecycle(rex::cvar::Lifecycle::kInitOnly);
+REXCVAR_DEFINE_BOOL(dmc_gpu_clear_handover_selective, true, "DmC/GPU", "A/B 257: ClearTargets selective aspect handover").lifecycle(rex::cvar::Lifecycle::kInitOnly);
+REXCVAR_DEFINE_BOOL(dmc_gpu_color_handover_readonly, true, "DmC/GPU", "A/B 258: readonly color targets skip EDRAM handover").lifecycle(rex::cvar::Lifecycle::kInitOnly);
+REXCVAR_DEFINE_BOOL(dmc_gpu_handover_fullscreen_overwrite, true, "DmC/GPU", "A/B 259: TakeImageLocked on provably-fullscreen opaque overwrite").lifecycle(rex::cvar::Lifecycle::kInitOnly);
+REXCVAR_DEFINE_BOOL(dmc_gpu_depth_handover_take_clean_stencil, true, "DmC/GPU", "A/B 260: clean-stencil depth handover takes image instead of copy").lifecycle(rex::cvar::Lifecycle::kInitOnly);
+REXCVAR_DEFINE_BOOL(dmc_gpu_depth_resolve_float_only_fb, true, "DmC/GPU", "A/B 261: single-RT depth resolve float-only framebuffer & lazy words").lifecycle(rex::cvar::Lifecycle::kInitOnly);
+REXCVAR_DEFINE_BOOL(dmc_gpu_stacked_resolve_compute, true, "DmC/GPU", "A/B 262: CopyStackedResolve single compute dispatch").lifecycle(rex::cvar::Lifecycle::kInitOnly);
+REXCVAR_DEFINE_BOOL(dmc_gpu_resolve_unroll, true, "DmC/GPU", "A/B 263: host sample-grid & resolve shaders unrolled").lifecycle(rex::cvar::Lifecycle::kInitOnly);
+REXCVAR_DEFINE_BOOL(dmc_gpu_lazy_decompress_opt, true, "DmC/GPU", "Defer resolvePendingDepth FB rebind until needed").lifecycle(rex::cvar::Lifecycle::kInitOnly);
+REXCVAR_DEFINE_BOOL(dmc_gpu_plume_state_dedupe, true, "DmC/GPU", "Dedupe viewport/scissor/depthBias/stencilRef/srgb & gate blendWords").lifecycle(rex::cvar::Lifecycle::kInitOnly);
+REXCVAR_DEFINE_BOOL(dmc_gpu_safe_read_barriers, true, "DmC/GPU", "Keep DkInvalidateFlags_Image on compressed RTs dirtySinceDrop").lifecycle(rex::cvar::Lifecycle::kInitOnly);
+REXCVAR_DEFINE_BOOL(dmc_gpu_push_coalesce, true, "DmC/GPU", "Coalesce adjacent Deko3D push constants").lifecycle(rex::cvar::Lifecycle::kInitOnly);
+REXCVAR_DEFINE_BOOL(dmc_gpu_upload_barrier_batch, true, "DmC/GPU", "Batch upload/copy transitions cleanly").lifecycle(rex::cvar::Lifecycle::kInitOnly);
 REXCVAR_DEFINE_INT32(banjo_renut_smaa_quality, 1, "Banjo/Enhancements",
                      "banjo_renut_smaa's preset: 1 = SMAA's medium (8 search steps, no diagonal or corner detection), "
                      "2 = high (16 search steps, diagonal search of 8, corner rounding 25: smoother diagonals, more GPU "
@@ -326,10 +337,30 @@ REXCVAR_DEFINE_INT32(banjo_renut_smaa_quality, 1, "Banjo/Enhancements",
 REXCVAR_DEFINE_DOUBLE(banjo_renut_smaa_threshold, 0.1, "Banjo/Enhancements",
                       "banjo_renut_smaa's luma edge threshold (SMAA's presets: 0.15 low, 0.1 medium and high, 0.05 "
                       "ultra): lower finds more edges (and softens more texture detail)");
-REXCVAR_DEFINE_STRING(banjo_renut_smaa_after_ps, "981A6A58F2ABFA42", "Banjo/Enhancements",
+REXCVAR_DEFINE_STRING(banjo_renut_smaa_after_ps,
+                      "053517A21D8ACE7F,075687A9E4A9E67A,0848D159B1BB3BD6,0AFA3866EF8DD80F,0CDC4622B87D2FBE,"
+                      "1775686B46ED2432,1779F81FAC3D2C35,1B3B39AAD23EB07A,1E6515C77D91E529,216B61D852D00BE9,"
+                      "21F07BC32BFA3CCE,22B9CDD0860BEC55,286D1E73F9DFD0C9,2BB816BC9164AEA6,33676070DC978EF1,"
+                      "33DEC9E6071938D3,34027F363068B89E,34C04860F00B79B2,3747F0C6EC813C70,38946B3533B63398,"
+                      "398F880294C4B175,3A4B6300A5F4EF3F,3B42416F73F50F48,3CAF400B7B6FF4AF,3CCA85A3E0937882,"
+                      "3E71AAA08AC3C717,41029F2EB4B767F1,42D521D915DCF51D,445B0C8C96117977,4571EADFB8F1A92B,"
+                      "4DCCF773B080EA74,4F7D6C4D41D8C875,4F82805F775EF25B,4FE3DCF08346AB95,539D75E86A7F6CDA,"
+                      "54F4095F4DB6ECEA,56B1112B07359470,5A31B7406AB03CAF,5EF9E0D9C5588190,5F422A54C8B874E7,"
+                      "6181328E462E3357,62702C0ABEB9F8FE,63D1F81A0D27F8BD,649B198E04597330,6792400F4BF4E876,"
+                      "68CCC6B449586F75,69640A2FECDBAC10,6B40043E1D007427,6B5328DA73F9ECCE,6E59DFC95475F687,"
+                      "72717F6A6376ABBC,77C28625F048DBF2,7B0696BABF281DD5,7CA5E00D62FB21DF,85244BE03E4712CE,"
+                      "86F018C66DA62682,8B31D156A53329DE,8B48A68652E4FE11,8D1011F30556BF58,8DE8ED01776CBA67,"
+                      "8EB83C15AA2BE155,947D3091A788E808,95E3356F7F56300C,98BDEE67FD97767A,9DFFE52796EE4CEB,"
+                      "A02ABF05BAA02067,A7B7F0C189A469D0,A9AF52516E04B3DD,AB2D271182C30485,AF61B3C250222757,"
+                      "B170E73C2CDE8447,C050813E874A427F,C56659067AC06881,C6C4751F1B58BBA1,C716EB38999F5617,"
+                      "C987DAA95EC173A3,C9AA4CC4402C3946,CA56AF71A8B5712D,CD007A98DED9BF1C,CD06EE4174360303,"
+                      "D15B36F4C0245477,D4E71481896A402B,D5B0B3513E62C2C3,D6CFD7FA466854B0,D6FA7526FE78936C,"
+                      "D706E38E80DE3A34,E0E4F4F6B7F1F921,E1305B6E27BA8A49,E744CC12335522C4,F540490ECF40EA18,"
+                      "F5C5909F265F1675,F6E4F23D81050184,F71ACAB87A02A6EB,F861C540EB9345D5,FC11930E59224BF0,"
+                      "FD5B9B9072BB01BD",
+                      "Banjo/Enhancements",
                       "banjo_renut_smaa: pixel shaders (16-digit hex hashes, comma separated) whose draw is the frame's "
-                      "final composite; SMAA runs on its target right after it, once a frame. N&B: 981A6A58F2ABFA42, "
-                      "the bloom and depth-of-field composite before the HUD (emulator trace of 2026-10-21)");
+                      "final composite (all 96 DmC UberPostProcessBlend permutations); SMAA and DRS scale on it");
 // banjo-nx (2026-10-21, internal resolution, the user's request; sa2-nx and Peggle 2 switch resolution by mode too).
 REXCVAR_DEFINE_INT32(banjo_renut_render_height_handheld, 720, "Banjo/Enhancements",
                      "NOT exact, the user's request (2026-10-21): on deko3d, the height of the 3D image in handheld mode: "
@@ -1206,6 +1237,14 @@ const char *AbName(int target) {
   case 238: return "runs and resolves wake the render thread as draws do (blur_renut_wake_batch_all, #28)";
   case 239: return "eight viewports kept, not one (blur_renut_viewport_memo, #32)";
   case 240: return "the mesh objects' generation raised only by a whole copy's drop (blur_renut_mesh_gen_whole_only, #36)";
+  case 256: return "readonly stencil test does not dirty depth target (dmc_gpu_stencil_keep_readonly)";
+  case 257: return "ClearTargets selective aspect handover (dmc_gpu_clear_handover_selective)";
+  case 258: return "readonly color targets skip EDRAM handover (dmc_gpu_color_handover_readonly)";
+  case 259: return "TakeImageLocked on provably-fullscreen opaque overwrite (dmc_gpu_handover_fullscreen_overwrite)";
+  case 260: return "clean-stencil depth handover takes image instead of copy (dmc_gpu_depth_handover_take_clean_stencil)";
+  case 261: return "single-RT depth resolve float-only framebuffer & lazy words (dmc_gpu_depth_resolve_float_only_fb)";
+  case 262: return "CopyStackedResolve single compute dispatch (dmc_gpu_stacked_resolve_compute)";
+  case 263: return "host sample-grid & resolve shaders unrolled (dmc_gpu_resolve_unroll)";
   default: {
     // sasrt-nx (2026-11-08): the GPU round's items (sasrt_gpu_round.h: 90 and up).
     const char *name = sasrt::gpu_round::AbName(target);
@@ -1381,6 +1420,28 @@ void StatsGameFrame() {
   const double since = std::chrono::duration<double>(now - g_stats.last_report).count();
   if (since < 10.0)
     return;
+  // Early-out when info logging is disabled: avoid building dozens of diagnostic strings on the game thread
+  // every 10 s (periodic hitch prevention), while preserving important WARN checks.
+  auto* core_logger = ::rex::GetLoggerRaw(::rex::log::core());
+  if (!core_logger || !core_logger->should_log(spdlog::level::info)) {
+    if (const std::string dd = ::renut::gpu::DroppedDrawsReport(); !dd.empty())
+      REXLOG_WARN("[renut] {}", dd);
+    if (const uint64_t checked = g_fetch_misaligned[0].exchange(0, std::memory_order_relaxed)) {
+      const uint64_t off = g_fetch_misaligned[1].exchange(0, std::memory_order_relaxed);
+      if (off)
+        REXLOG_WARN("[renut] fetch data: {} of {} draws with an offset, slot or size off 16 bytes (the aw4 loads read "
+                    "the wrong words there)", off, checked);
+    }
+    if (const uint64_t n = g_exp_adjust[0].exchange(0, std::memory_order_relaxed)) {
+      const uint64_t neg = g_exp_adjust[1].exchange(0, std::memory_order_relaxed);
+      const uint64_t pos = g_exp_adjust[2].exchange(0, std::memory_order_relaxed);
+      REXLOG_WARN("[renut] exponent adjust: {} texture binds with a fetch exponent adjust ({} negative, {} positive), "
+                  "which Renut does not apply (the sampled values are 2^adjust too large or small)", n, neg, pos);
+    }
+    g_stats.total = {};
+    g_stats.last_report = now;
+    return;
+  }
   // blur-nx (2026-11-17, the Renut audit's #31, a census): this report is built on the game thread at its Swap (the
   // Game Master in Blur), under g_stats.mutex; how long it takes is logged at its end (the next report says the last).
   struct ReportClock {
@@ -2538,6 +2599,35 @@ void ResolveTraceFrameStart() {
   }
 }
 
+namespace {
+std::atomic<bool> g_frame_diag_requested{false};
+std::atomic<uint32_t> g_frame_diag_seq{0};
+}  // namespace
+
+void RequestFrameDiagCapture() {
+  g_frame_diag_requested.store(true, std::memory_order_release);
+}
+
+bool ConsumeFrameDiagCapture() {
+  return g_frame_diag_requested.exchange(false, std::memory_order_acq_rel);
+}
+
+void WriteFrameDiagFile(const std::string &contents) {
+  const uint32_t seq = g_frame_diag_seq.fetch_add(1, std::memory_order_relaxed) + 1;
+  std::error_code ec;
+  const std::filesystem::path dir = rex::filesystem::GetExecutableFolder() / "logs";
+  std::filesystem::create_directories(dir, ec);
+  const std::filesystem::path path = dir / fmt::format("frame_diag_{:04}.log", seq);
+  std::ofstream out(path, std::ios::binary | std::ios::trunc);
+  if (out) {
+    out.write(contents.data(), std::streamsize(contents.size()));
+    out.flush();
+    REXLOG_WARN("[frame_diag] wrote {}", path.string());
+  } else {
+    REXLOG_WARN("[frame_diag] failed to open {}", path.string());
+  }
+}
+
 
 int DiagBuildDelayMs() {
   return REXCVAR_GET(banjo_renut_diag_build_delay_ms);
@@ -2841,6 +2931,21 @@ void LatchTuning() {
   g_latched.small_captures = REXCVAR_GET(banjo_renut_small_captures);
   g_latched.delta_masks = REXCVAR_GET(banjo_renut_delta_masks);
   g_latched.delta_prefetch = REXCVAR_GET(banjo_renut_delta_prefetch);
+  g_latched.dmc_stencil_keep_readonly = REXCVAR_GET(dmc_gpu_stencil_keep_readonly);
+  g_latched.dmc_clear_handover_selective = REXCVAR_GET(dmc_gpu_clear_handover_selective);
+  g_latched.dmc_color_handover_readonly = REXCVAR_GET(dmc_gpu_color_handover_readonly);
+  g_latched.dmc_handover_fullscreen_overwrite = REXCVAR_GET(dmc_gpu_handover_fullscreen_overwrite);
+  g_latched.dmc_depth_handover_take_clean_stencil = REXCVAR_GET(dmc_gpu_depth_handover_take_clean_stencil);
+  g_latched.dmc_depth_resolve_float_only_fb = REXCVAR_GET(dmc_gpu_depth_resolve_float_only_fb);
+  g_latched.dmc_stacked_resolve_compute = REXCVAR_GET(dmc_gpu_stacked_resolve_compute);
+  g_latched.dmc_resolve_unroll = REXCVAR_GET(dmc_gpu_resolve_unroll);
+#if defined(PLUME_DEKO3D)
+  plume::g_deko3dOptions.lazyDecompressOpt = REXCVAR_GET(dmc_gpu_lazy_decompress_opt);
+  plume::g_deko3dOptions.stateDedupe = REXCVAR_GET(dmc_gpu_plume_state_dedupe);
+  plume::g_deko3dOptions.safeReadBarriers = REXCVAR_GET(dmc_gpu_safe_read_barriers);
+  plume::g_deko3dOptions.pushCoalesce = REXCVAR_GET(dmc_gpu_push_coalesce);
+  plume::g_deko3dOptions.uploadBarrierBatch = REXCVAR_GET(dmc_gpu_upload_barrier_batch);
+#endif
   g_latched.counts = REXCVAR_GET(log_level) != "off" && REXCVAR_GET(banjo_renut_draw_counts);  // banjo-nx (2026-11-20, batch #4)
   g_latched.ready = true;  // banjo-nx (2026-11-20, batch #3): Latch() reads this one
   g_latched_ready.store(true, std::memory_order_release);

@@ -378,6 +378,11 @@ REXCVAR_DEFINE_BOOL(dishonored_renut_vertex_readable_check, true, "Banjo/Enhance
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 // dishonored-nx (2026-10-31; port 106): a 2_10_10_10_FLOAT (7e3) target's pixel shader output clamped to the 7e3 range.
+REXCVAR_DEFINE_BOOL(dmc_gpu_hw_srgb, true, "Banjo/Enhancements",
+                    "deko3d: decode standard RGB-gamma textures (BC1/BC2/BC3/RGBA8/BGRA8) in Maxwell texture "
+                    "hardware via sRGB DkImageView instead of per-pixel shader PWL math. Drops 35-62% PS ALU "
+                    "and reduces GPR pressure on Switch.")
+    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 REXCVAR_DEFINE_BOOL(dishonored_renut_clamp_7e3, true, "Banjo/Enhancements",
                     "From dishonored-nx: a pixel shader drawing into a 2_10_10_10_FLOAT (7e3) target with exponent bias 0 "
                     "clamps that output to the 7e3 range (colour 0 to 31.875, alpha 0 to 1, NaN to 0), as the Xenos stores "
@@ -593,6 +598,10 @@ bool VertexReadableCheckOn() {
 }
 bool Clamp7e3On() {
   static const bool on = REXCVAR_GET(dishonored_renut_clamp_7e3);
+  return on;
+}
+bool DmcHwSrgbOn() {
+  static const bool on = REXCVAR_GET(dmc_gpu_hw_srgb);
   return on;
 }
 }  // namespace banjo::renut_gpu

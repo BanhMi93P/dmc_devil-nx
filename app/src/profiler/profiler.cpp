@@ -178,6 +178,30 @@ std::string ThreadCpuUsage() {
   return out;
 }
 
+ProcessCpuSample SampleProcessCpu() {
+  ProcessCpuSample res{};
+#if REX_PLATFORM_SWITCH
+  static std::mutex s_cpu_mutex;
+  static bool s_have_prev = false;
+  static uint64_t s_prev_thread_ticks = 0;
+  static uint64_t s_prev_wall_ticks = 0;
+  std::lock_guard<std::mutex> lock(s_cpu_mutex);
+  const uint64_t cur_thread = os::switch_cpu_profiler::TotalThreadTicks();
+  const uint64_t cur_wall = armGetSystemTick();
+  if (s_have_prev && cur_wall > s_prev_wall_ticks && cur_thread >= s_prev_thread_ticks) {
+    const double wall = double(cur_wall - s_prev_wall_ticks);
+    const double busy = double(cur_thread - s_prev_thread_ticks);
+    res.valid = true;
+    res.pct_one_core = 100.0 * busy / wall;
+    res.pct_four_cores = res.pct_one_core * 0.25;
+  }
+  s_prev_thread_ticks = cur_thread;
+  s_prev_wall_ticks = cur_wall;
+  s_have_prev = true;
+#endif
+  return res;
+}
+
 void Start() {
 #if REX_PLATFORM_SWITCH
   os::switch_cpu_profiler::SetSlowFrameThreshold(

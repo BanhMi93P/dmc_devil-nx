@@ -121,7 +121,7 @@ void FreePhysical(u32 va) {
 
 // The GPU format table: per D3D format low 6 bits, bits per
 // pixel in the low byte, flags in the high one.
-constexpr u32 kFormatTable = 0x8227A0E0;
+constexpr u32 kFormatTable = 0x8227B800;
 
 u16 FormatTableEntry(u32 format) {
   const auto *table = GuestPtr<const be_u16>(kFormatTable);
@@ -132,8 +132,8 @@ u32 FormatBitsPerPixel(u32 format) {
   return FormatTableEntry(format) & 0xFF;
 }
 
-// Set while a depth surface owns the HiZ memory.
-constexpr u32 kHiZOwnerVa = 0x836B99F8;
+// Set while a depth surface owns the HiZ memory (TU1: 0x836B9A78).
+constexpr u32 kHiZOwnerVa = 0x836B9A78;
 
 u32 LoadU32(u32 va) {
   const auto *p = GuestPtr<const be_u32>(va);
@@ -1758,7 +1758,7 @@ BANJO_RENUT_HOOK(sub_824D08A8, AlignTextureDimensions_hook);  // D3D_AlignTextur
 BANJO_RENUT_HOOK(sub_824D0D38, GetMipTailLevelOffsetCoords_hook);  // D3D_GetMipTailLevelOffsetCoords  // katamari-nx: N&B sub_8263DD48, signature 0.95 (next 0.28)
 #endif
 
-DMC_RENUT_HOOK_RAW(sub_8252E7C8) {  // D3DResource_Destroy
+DMC_RENUT_HOOK_RAW(sub_8252E838) {  // D3DResource_Destroy
   const u32 resource = ctx.r3.u32;
   render_thread::Queue([resource] {
     ReleaseHostSurfaceLocked(resource);
@@ -1766,5 +1766,5 @@ DMC_RENUT_HOOK_RAW(sub_8252E7C8) {  // D3DResource_Destroy
     ReleaseGuestShaderLocked(resource);
     ReleaseGuestDeclarationLocked(resource);
   });
-  __imp__sub_8252E7C8(ctx, base);
+  __imp__sub_8252E838(ctx, base);
 }

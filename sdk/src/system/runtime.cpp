@@ -333,8 +333,13 @@ bool Runtime::SetupVfs() {
 
   // Mount update_data_root as update:\ if provided
   if (!update_data_root_.empty()) {
-    auto abs_update_root = std::filesystem::absolute(update_data_root_);
-    if (std::filesystem::exists(abs_update_root)) {
+    std::error_code ec;
+    auto abs_update_root = std::filesystem::absolute(update_data_root_, ec);
+    if (ec) {
+      abs_update_root = update_data_root_;
+      ec.clear();
+    }
+    if (std::filesystem::exists(abs_update_root, ec)) {
       auto update_mount = "\\Device\\Harddisk0\\PartitionUpdate";
       auto update_device =
           std::make_unique<rex::filesystem::HostPathDevice>(update_mount, abs_update_root, true);
@@ -343,8 +348,14 @@ bool Runtime::SetupVfs() {
 #if defined(__SWITCH__)
         rex::filesystem::SetReadOnlyGameRoot(abs_update_root);  // port 203: a read-only device's files
 #endif
-        REXSYS_DEBUG("  Mounted {} at update:", abs_update_root.string());
+        REXSYS_INFO("  Mounted {} at update:", abs_update_root.string());
+      } else {
+        REXSYS_WARN("Runtime::SetupVfs: Failed to mount update_data_root: {}",
+                    abs_update_root.string());
       }
+    } else {
+      REXSYS_WARN("Runtime::SetupVfs: update_data_root does not exist: {}",
+                  abs_update_root.string());
     }
   }
 

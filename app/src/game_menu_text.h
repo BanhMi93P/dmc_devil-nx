@@ -20,6 +20,11 @@ enum MenuText : int {
   A_UNLOCKED_OF, A_UNLOCKED, A_NONE, A_NOT_LOADED,
   // rr6-nx (2026-11-22): each mode's dynamic resolution switch (T_HANDHELD / T_DOCKED are the fixed resolutions now)
   T_DYN_HANDHELD, T_DYN_DOCKED, H_DYN_HANDHELD, H_DYN_DOCKED,
+  // dmc_devil-nx: shadows, FPS/profiler overlays, and one-shot frame diagnostics in +/- menu
+  T_ENV_SHADOWS, T_CHAR_SHADOWS, T_SHOW_FPS, T_SHOW_PROFILER, T_FRAME_DIAG,
+  H_ENV_SHADOWS, H_CHAR_SHADOWS, H_SHOW_FPS, H_SHOW_PROFILER, H_FRAME_DIAG,
+  C_CAPTURE,
+  T_VSYNC, H_VSYNC,
   kMenuTextCount
 };
 
@@ -80,6 +85,16 @@ inline const char* const kMenuTextTable[kMenuLanguages][kMenuTextCount] = {
         "handheld resolution.",
         "On: the 3D image on the TV goes between %d and %d lines, lower while the GPU is busy. Off: the fixed docked "
         "resolution.",
+        "Environment shadows", "Character/NPC shadows", "Show FPS", "Show Profiler", "Capture Frame Diag",
+        "Environment/sun CSM shadow map scale. Lower saves GPU fill/bandwidth; Off disables environment shadow casting.",
+        "Character and NPC local shadow map scale. Lower saves GPU fill/bandwidth; Off disables character shadows.",
+        "Show the FPS, CPU and GPU frame time overlay in the top-left corner.",
+        "Show both detailed ImGui Profiler HUD windows (256-frame pacing graph, vblanks, CPU/GPU waits).",
+        "Capture one full GPU frame breakdown (passes, shaders, render targets, resolves) to logs/frame_diag_*.log.",
+        "Capture",
+        "VSync",
+        "Off (recommended on Switch): prevents 22-29 fps frames from snapping down to 20 fps without tearing on the "
+        "Switch compositor. On: locks presents to the 60 Hz display refresh.",
     },
     {  // French
         "Paramètres", "Succès", "Commandes J%d",
@@ -128,6 +143,16 @@ inline const char* const kMenuTextTable[kMenuLanguages][kMenuTextCount] = {
         "Désactivé : la résolution portable fixe.",
         "Activé : l'image 3D sur la TV varie entre %d et %d lignes, plus bas quand le GPU est chargé. Désactivé : la "
         "résolution TV fixe.",
+        "Ombres environnement", "Ombres personnages/PNJ", "Afficher FPS", "Afficher Profiler", "Capture Frame Diag",
+        "Échelle des ombres d'environnement. Plus bas économise le GPU.",
+        "Échelle des ombres locales des personnages/PNJ. Plus bas économise le GPU.",
+        "Afficher le compteur FPS / CPU / GPU en haut à gauche.",
+        "Afficher les deux fenêtres détaillées du Profiler ImGui.",
+        "Capturer une image complète de diagnostic GPU vers logs/frame_diag_*.log.",
+        "Capturer",
+        "Synchronisation verticale",
+        "Désactivé (recommandé sur Switch) : évite la chute à 20 i/s des images à 22-29 i/s sans déchirement sur Switch. "
+        "Activé : verrouille sur 60 Hz.",
     },
     {  // German
         "Einstellungen", "Erfolge", "Steuerung S%d",
@@ -177,6 +202,16 @@ inline const char* const kMenuTextTable[kMenuLanguages][kMenuTextCount] = {
         "Aus: die feste Handheld-Auflösung.",
         "An: das 3D-Bild am Fernseher zwischen %d und %d Zeilen, niedriger, solange die GPU ausgelastet ist. Aus: die "
         "feste TV-Auflösung.",
+        "Umgebungsschatten", "Charakter-/NPC-Schatten", "FPS anzeigen", "Profiler anzeigen", "Frame-Diag erfassen",
+        "Auflösungsskalierung für Umgebungsschatten. Niedriger entlastet die GPU.",
+        "Auflösungsskalierung für lokale Charakter-/NPC-Schatten. Niedriger entlastet die GPU.",
+        "FPS-, CPU- und GPU-Anzeige oben links einblenden.",
+        "Beide detaillierten ImGui-Profiler-Fenster einblenden.",
+        "Einzelbild-GPU-Diagnose in logs/frame_diag_*.log speichern.",
+        "Erfassen",
+        "VSync",
+        "Aus (auf Switch empfohlen): verhindert den Abfall auf 20 fps bei 22-29 fps ohne Tearing. Ein: synchronisiert "
+        "mit 60 Hz.",
     },
     {  // Italian
         "Impostazioni", "Obiettivi", "Comandi G%d",
@@ -226,6 +261,15 @@ inline const char* const kMenuTextTable[kMenuLanguages][kMenuTextCount] = {
         "risoluzione portatile fissa.",
         "Sì: l'immagine 3D sulla TV va da %d a %d linee, più bassa quando la GPU è impegnata. No: la risoluzione TV "
         "fissa.",
+        "Ombre ambiente", "Ombre personaggi/PNG", "Mostra FPS", "Mostra Profiler", "Cattura Frame Diag",
+        "Scala ombre ambientali. Valori più bassi alleggeriscono la GPU.",
+        "Scala ombre locali di personaggi/PNG. Valori più bassi alleggeriscono la GPU.",
+        "Mostra sovrimpressione FPS / CPU / GPU in alto a sinistra.",
+        "Mostra entrambe le finestre dettagliate del Profiler ImGui.",
+        "Salva un fotogramma diagnostico GPU in logs/frame_diag_*.log.",
+        "Cattura",
+        "VSync",
+        "No (consigliato su Switch): evita il calo a 20 fps per frame da 22-29 fps senza tearing. Sì: blocca a 60 Hz.",
     },
     {  // Spanish
         "Ajustes", "Logros", "Controles J%d",
@@ -274,6 +318,15 @@ inline const char* const kMenuTextTable[kMenuLanguages][kMenuTextCount] = {
         "resolución portátil fija.",
         "Sí: la imagen 3D en la TV va de %d a %d líneas, más baja mientras la GPU está ocupada. No: la resolución TV "
         "fija.",
+        "Sombras de entorno", "Sombras de personajes/PNJ", "Mostrar FPS", "Mostrar Profiler", "Capturar Frame Diag",
+        "Escala de sombras de entorno. Valores menores reducen carga de GPU.",
+        "Escala de sombras de personajes/PNJ. Valores menores reducen carga de GPU.",
+        "Mostrar FPS, CPU y GPU en la esquina superior izquierda.",
+        "Mostrar las dos ventanas detalladas del Profiler ImGui.",
+        "Guardar diagnóstico de un fotograma GPU en logs/frame_diag_*.log.",
+        "Capturar",
+        "VSync",
+        "No (recomendado en Switch): evita que 22-29 fps caigan a 20 fps sin tearing. Sí: sincroniza a 60 Hz.",
     },
     {  // Polish
         "Ustawienia", "Osiągnięcia", "Sterowanie G%d",
@@ -321,6 +374,15 @@ inline const char* const kMenuTextTable[kMenuLanguages][kMenuTextCount] = {
         "rozdzielczość przenośna.",
         "Wł.: obraz 3D na telewizorze od %d do %d linii, niższy, gdy GPU jest obciążone. Wył.: stała rozdzielczość "
         "TV.",
+        "Cienie otoczenia", "Cienie postaci/NPC", "Pokaż FPS", "Pokaż Profiler", "Zapisz Frame Diag",
+        "Skala cieni otoczenia. Niższa odciąża GPU.",
+        "Skala lokalnych cieni postaci/NPC. Niższa odciąża GPU.",
+        "Pokaż nakładkę FPS / CPU / GPU w lewym górnym rogu.",
+        "Pokaż oba szczegółowe okna Profilera ImGui.",
+        "Zapisz diagnostykę jednej klatki GPU do logs/frame_diag_*.log.",
+        "Zapisz",
+        "VSync",
+        "Wył. (zalecane na Switchu): zapobiega spadkom z 22-29 kl./s do 20 kl./s bez rozrywania obrazu. Wł.: 60 Hz.",
     },
     {  // Russian
         "Настройки", "Достижения", "Управление И%d",
@@ -368,6 +430,15 @@ inline const char* const kMenuTextTable[kMenuLanguages][kMenuTextCount] = {
         "разрешение (портативный).",
         "Вкл.: 3D-изображение на телевизоре от %d до %d строк, ниже, пока GPU загружен. Выкл.: фиксированное "
         "разрешение (ТВ).",
+        "Тени окружения", "Тени персонажей/NPC", "Показать FPS", "Показать Profiler", "Снять Frame Diag",
+        "Масштаб теней окружения. Ниже — меньше нагрузка на GPU.",
+        "Масштаб теней персонажей/NPC. Ниже — меньше нагрузка на GPU.",
+        "Показывать оверлей FPS / CPU / GPU в левом верхнем углу.",
+        "Показывать оба подробных окна ImGui Profiler.",
+        "Сохранить подробный разбор одного кадра GPU в logs/frame_diag_*.log.",
+        "Снять",
+        "Вертикальная синхронизация",
+        "Выкл. (рекомендуется для Switch): не снижает 22-29 к/с до 20 к/с без разрывов кадра. Вкл.: 60 Гц.",
     },
     {  // Portuguese
         "Configurações", "Conquistas", "Controles J%d",
@@ -416,6 +487,15 @@ inline const char* const kMenuTextTable[kMenuLanguages][kMenuTextCount] = {
         "Sim: a imagem 3D no modo portátil vai de %d a %d linhas, menor enquanto a GPU está ocupada. Não: a resolução "
         "portátil fixa.",
         "Sim: a imagem 3D na TV vai de %d a %d linhas, menor enquanto a GPU está ocupada. Não: a resolução TV fixa.",
+        "Sombras do ambiente", "Sombras de personagens/NPC", "Mostrar FPS", "Mostrar Profiler", "Capturar Frame Diag",
+        "Escala das sombras de ambiente. Menor reduz carga da GPU.",
+        "Escala das sombras locais de personagens/NPC. Menor reduz carga da GPU.",
+        "Mostrar sobreposição de FPS, CPU e GPU no canto superior esquerdo.",
+        "Mostrar as duas janelas detalhadas do Profiler ImGui.",
+        "Salvar diagnóstico completo de um quadro GPU em logs/frame_diag_*.log.",
+        "Capturar",
+        "VSync",
+        "Não (recomendado no Switch): evita queda de 22-29 fps para 20 fps sem tearing. Sim: trava em 60 Hz.",
     },
     {  // Japanese
         "設定", "実績", "P%d 操作",
@@ -456,6 +536,15 @@ inline const char* const kMenuTextTable[kMenuLanguages][kMenuTextCount] = {
         "TVモード動的解像度",
         "オン：携帯モードの3D画像は%dから%dラインの間で変わり、GPUが忙しいときは低くなります。オフ：携帯モード固定解像度。",
         "オン：TVの3D画像は%dから%dラインの間で変わり、GPUが忙しいときは低くなります。オフ：TVモード固定解像度。",
+        "環境の影", "キャラ/NPCの影", "FPS表示", "プロファイラ表示", "フレーム診断保存",
+        "環境シャドウマップの解像度倍率。低いほどGPU負荷が減ります。",
+        "キャラ/NPCのローカルシャドウ倍率。低いほどGPU負荷が減ります。",
+        "左上にFPS/CPU/GPUのオーバーレイを表示します。",
+        "ImGuiプロファイラの詳細ウィンドウ2つを表示します。",
+        "1フレームのGPU詳細診断を logs/frame_diag_*.log に保存します。",
+        "取得",
+        "垂直同期",
+        "オフ（Switch推奨）：ティアリングなしで22〜29fpsが20fpsに落ちるのを防ぎます。オン：60Hz固定。",
     },
     {  // Korean
         "설정", "도전 과제", "P%d 조작",
@@ -496,6 +585,15 @@ inline const char* const kMenuTextTable[kMenuLanguages][kMenuTextCount] = {
         "TV 모드 동적 해상도",
         "켬: 휴대 모드의 3D 화면이 %d~%d 라인 사이에서 바뀌며, GPU가 바쁠 때 낮아집니다. 끔: 휴대 모드 고정 해상도.",
         "켬: TV의 3D 화면이 %d~%d 라인 사이에서 바뀌며, GPU가 바쁠 때 낮아집니다. 끔: TV 모드 고정 해상도.",
+        "환경 그림자", "캐릭터/NPC 그림자", "FPS 표시", "프로파일러 표시", "프레임 진단 저장",
+        "환경 그림자 맵 해상도 배율. 낮을수록 GPU 부하가 줄어듭니다.",
+        "캐릭터/NPC 로컬 그림자 배율. 낮을수록 GPU 부하가 줄어듭니다.",
+        "왼쪽 상단에 FPS / CPU / GPU 오버레이를 표시합니다.",
+        "상세 ImGui 프로파일러 창 2개를 표시합니다.",
+        "1프레임 GPU 상세 진단을 logs/frame_diag_*.log 로 저장합니다.",
+        "캡처",
+        "수직 동기화",
+        "끔(Switch 권장): 화면 찢어짐 없이 22~29fps가 20fps로 고정 하락하는 현상을 방지합니다. 켬: 60Hz 동기화.",
     },
     {  // Chinese (Simplified)
         "设置", "成就", "P%d 操作",
@@ -533,6 +631,15 @@ inline const char* const kMenuTextTable[kMenuLanguages][kMenuTextCount] = {
         "电视模式动态分辨率",
         "开：掌机模式下 3D 画面在 %d 到 %d 行之间变化，GPU 繁忙时降低。关：掌机模式固定分辨率。",
         "开：电视上 3D 画面在 %d 到 %d 行之间变化，GPU 繁忙时降低。关：电视模式固定分辨率。",
+        "环境阴影", "角色/NPC 阴影", "显示帧率", "显示性能分析器", "捕获帧诊断",
+        "环境/太阳阴影贴图分辨率缩放。越低越省 GPU。",
+        "角色/NPC 局部阴影贴图分辨率缩放。越低越省 GPU。",
+        "在左上角显示 FPS、CPU 和 GPU 耗时悬浮窗。",
+        "显示两个详细 ImGui 性能分析器窗口。",
+        "将单帧完整 GPU 诊断信息保存到 logs/frame_diag_*.log。",
+        "捕获",
+        "垂直同步",
+        "关（Switch 推荐）：防止 22-29 帧掉到 20 帧锁格，且在 Switch 合成器下无撕裂。开：锁定 60 Hz 刷新。",
     },
     {  // Chinese (Traditional)
         "設定", "成就", "P%d 操作",
@@ -570,6 +677,15 @@ inline const char* const kMenuTextTable[kMenuLanguages][kMenuTextCount] = {
         "電視模式動態解析度",
         "開：掌上模式下 3D 畫面在 %d 到 %d 行之間變化，GPU 繁忙時降低。關：掌上模式固定解析度。",
         "開：電視上 3D 畫面在 %d 到 %d 行之間變化，GPU 繁忙時降低。關：電視模式固定解析度。",
+        "環境陰影", "角色/NPC 陰影", "顯示幀率", "顯示效能分析器", "擷取幀診斷",
+        "環境/太陽陰影貼圖解析度縮放。越低越省 GPU。",
+        "角色/NPC 局部陰影貼圖解析度縮放。越低越省 GPU。",
+        "在左上角顯示 FPS、CPU 與 GPU 耗時資訊。",
+        "顯示兩個詳細 ImGui 效能分析器視窗。",
+        "將單幀完整 GPU 診斷資訊儲存到 logs/frame_diag_*.log。",
+        "擷取",
+        "垂直同步",
+        "關（Switch 推薦）：避免 22-29 fps 降檔鎖定到 20 fps，且在 Switch 合成器下無畫面撕裂。開：鎖定 60 Hz。",
     },
 };
 

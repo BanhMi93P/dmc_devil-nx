@@ -85,6 +85,7 @@ struct HostTexture {
   bool view_swap_red_blue = false;
   struct SwizzleView {
     u32 swizzle = 0;
+    bool srgb = false;
     std::unique_ptr<plume::RenderTextureView> view;
     uint32_t slot = UINT32_MAX;
   };
@@ -129,6 +130,10 @@ struct HostTexture {
   // 'resolves' counts the resolves into it.
   std::unique_ptr<HostTexture> words;  // a bare target: texture and layout
   std::unique_ptr<plume::RenderFramebuffer> depth_framebuffer;
+  std::unique_ptr<plume::RenderFramebuffer> depth_float_framebuffer;
+  bool stacked_render_target = false;
+  std::vector<std::unique_ptr<plume::RenderTextureView>> stacked_rt_views;
+  std::vector<std::unique_ptr<plume::RenderFramebuffer>> stacked_fbs;
   // banjo-nx (2026-10-18): a resolve destination as the target of DrawResolveCopy (draw.cpp), made at its first one.
   std::unique_ptr<plume::RenderFramebuffer> copy_framebuffer;
   uint64_t resolves = 0;
@@ -180,6 +185,7 @@ struct TextureBinding {
   uint32_t slot = 0;
   TextureDimension dimension = TextureDimension::Tex2D;
   bool stacked = false;  // a 2D array fetched as 3D (dimension Tex3D)
+  bool hw_srgb = false;  // dmc_gpu_hw_srgb: descriptor uses hardware sRGB view format
   RenderScale scale;     // HostTexture::scale
   // The scale its host levels reach (HostTexture::extra_levels), 1x without
   // them; the sampler takes it (SamplerSlotLocked).
@@ -312,6 +318,7 @@ void NoteColorResolveWrittenLocked(HostTexture &dest);
 // through such a header). Bumps 'resolves'.
 HostTexture *GetDepthResolveTextureLocked(u32 texture_va, RenderScale scale,
                                           const d3d::TextureFetchConstant *header_format = nullptr);
+bool EnsureDepthWordsTextureLocked(HostTexture *t);
 
 // Existing host texture for a guest texture VA, or nullptr.
 HostTexture *FindHostTextureLocked(u32 texture_va);

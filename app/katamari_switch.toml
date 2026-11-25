@@ -4,35 +4,45 @@
 # Language: "auto" (Switch system language), "english", "french", "german", "italian", "spanish", "japanese"
 language = "english"
 
-# Display & Resolution (deko3d native)
+# Display & Resolution (deko3d native: 480p / 540p / 720p, default 720p; dynamic resolution OFF; VSync OFF)
+renut_resolution = "720p"
 banjo_renut_render_height_handheld = 720
-banjo_renut_render_height_docked = 1080
-banjo_renut_dynamic_resolution = true
-banjo_renut_dynamic_handheld_low = 540
-banjo_renut_dynamic_handheld_high = 720
-banjo_renut_dynamic_docked_low = 720
-banjo_renut_dynamic_docked_high = 1080
-banjo_renut_dynamic_steps = 4
-sasrt_dynamic_lines_handheld = 18
-sasrt_dynamic_lines_docked = 36
-banjo_renut_dynamic_gpu_ms = 27.5
-sasrt_dynamic_cpu_aware = false
-banjo_renut_dynamic_up_s = 2.0
+banjo_renut_render_height_docked = 720
+banjo_renut_dynamic_resolution = false
+banjo_renut_dynamic_resolution_handheld = false
+banjo_renut_dynamic_resolution_docked = false
+renut_vsync = false
 
-# Controls
+# Anti-aliasing & Shadow scaling (configurable live in + / - Settings menu)
+banjo_renut_smaa = false
+msaa_level = 1
+dmc_env_shadows = "0.67x"
+dmc_char_shadows = "0.67x"
+
+# Controls (Hold PLUS + MINUS to open the in-game Settings / Debug menu)
 input_xbox_layout = false
 input_joycon_sideways = true
 input_rumble = true
+input_menu_combo = "PLUS+MINUS"
 
-# Renderer overrides (UE3 half-res DOF wipe & dynamic VB kick reuse)
+# Renderer overrides
 blur_renut_wipe_overwritten = true
 banjo_renut_kick_reuse = false
+rr6_frames_ahead = 0
 
-# Logging (set log_level = "info" and log_file_writer = true to capture logs in logs/rex/)
-log_level = "info"
-log_file_writer = true
+# Release Logging & Monitor (all OFF by default for stutter-free gameplay; toggle FPS / Profiler in + / - menu)
+log_level = "warn"
+log_file_writer = false
+renut_gpu_profile = 0.0
+banjo_renut_diag_gpu_shaders = false
+sasrt_gpu_diag_profile_vs = false
+sasrt_deko3d_diag_barriers = false
+banjo_deko3d_log_misses = false
 banjo_show_fps = false
 banjo_show_profiler = false
+banjo_cpu_profiler = false
+switch_profile_stacks = false
+banjo_stall_watch_seconds = 0
 
 [input_p1]
 a = ""

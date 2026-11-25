@@ -4409,8 +4409,8 @@ SchedDataCalculatorGM107::insertBarriers(BasicBlock *bb)
          // completing before this insn.
          usei = findFirstUse(insn);
 
-         // Allocate and emit a new barrier.
-         bar_id = bars.findFreeRange(1);
+         // Allocate and emit a new barrier (#38: cross-BB defs use shared barrier 5 to free 0..4).
+         bar_id = usei ? bars.findFreeRange(1) : 5;
          if (bar_id == -1)
             bar_id = 5;
          bars.set(bar_id);
@@ -4428,8 +4428,8 @@ SchedDataCalculatorGM107::insertBarriers(BasicBlock *bb)
          if (usei && defi && usei->serial <= defi->serial)
             continue;
 
-         // Allocate and emit a new barrier.
-         bar_id = bars.findFreeRange(1);
+         // Allocate and emit a new barrier (#38: cross-BB reads use shared barrier 5 to free 0..4).
+         bar_id = defi ? bars.findFreeRange(1) : 5;
          if (bar_id == -1)
             bar_id = 5;
          bars.set(bar_id);

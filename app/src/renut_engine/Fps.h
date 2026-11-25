@@ -13,6 +13,8 @@ inline double cpuMS;
 inline double gpuMS;
 inline int flock;
 
+REXCVAR_DECLARE(bool, banjo_show_fps);
+
 class FPSCounter {
 public:
     std::string name;
@@ -45,7 +47,9 @@ class FpsOverlayDialog : public rex::ui::ImGuiDialog {
 public:
     explicit FpsOverlayDialog(rex::ui::ImGuiDrawer* drawer) : rex::ui::ImGuiDialog(drawer) {
         rex::ui::RegisterBind("bind_fps_overlay", "F1", "Toggle FPS overlay", [this] {
-            if (fpsManager) fpsManager->showFPS = !fpsManager->showFPS;
+            const bool next = !REXCVAR_GET(banjo_show_fps);
+            rex::cvar::SetFlagByName("banjo_show_fps", next ? "true" : "false");
+            if (fpsManager) fpsManager->showFPS = next;
             });
     }
 
@@ -55,8 +59,8 @@ public:
 
     FPSManager* fpsManager = nullptr;
 
-    // blur-nx (2026-11-18, #27): only while the counter shows.
-    bool WantsFrame() const override { return fpsManager && fpsManager->showFPS; }
+    // blur-nx (2026-11-18, #27): only while the counter shows; reads banjo_show_fps live for + / - menu toggle.
+    bool WantsFrame() const override { return fpsManager && REXCVAR_GET(banjo_show_fps); }
 
     void OnDraw(ImGuiIO& io) override {
 
@@ -64,7 +68,8 @@ public:
         if(flock > 120){ flock = 0;}
         else{ flock++; }
 
-        if (!fpsManager || !fpsManager->showFPS) return;
+        if (!fpsManager || !REXCVAR_GET(banjo_show_fps)) return;
+        fpsManager->showFPS = true;
         if (!AppImGuiReady()) return;  // renut-ultimate (port 66)
 
         const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDecoration;

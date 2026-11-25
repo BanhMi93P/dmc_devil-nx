@@ -1,7 +1,7 @@
 # Third-party notices
 
 This port is built on the work of other projects. Their licenses apply to their code and to the parts of this repository
-derived from it. New code written for this port is copyright (c) 2026 ChanseyIsTheBest and is under the license of the
+derived from it. New code written for this port is copyright (c) 2026 BanhMi93P and ChanseyIsTheBest and is under the license of the
 folder it is in (see below).
 
 ## Projects this port is derived from
@@ -81,6 +81,6 @@ components are listed in its `NOTICES.md`.
 
 ## Trademarks
 
-Beautiful Katamari is a trademark of Bandai Namco Entertainment; the icon (`tools/switch/icon/katamari_icon.jpg`,
-`app/icon/app.ico`) is its cover artwork, © Bandai Namco. Nintendo Switch is a trademark of Nintendo. Xbox 360 is a
-trademark of Microsoft. This project is not affiliated with or endorsed by any of them.
+DmC: Devil May Cry is a trademark of Capcom Co., Ltd. (developed by Ninja Theory); the icons (`app/icon.jpg`,
+`app/icon/dmc_devil_icon.jpg`, `app/icon/app.ico`) are its cover artwork, © Capcom Co., Ltd. Nintendo Switch is a
+trademark of Nintendo. Xbox 360 is a trademark of Microsoft. This project is not affiliated with or endorsed by any of them.

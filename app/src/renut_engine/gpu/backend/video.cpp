@@ -400,9 +400,14 @@ bool BuildDepthResolvePipelines(VideoState &s) {
       if (s.sasrt_depth_float_ps) {
         desc.pixelShader = s.sasrt_depth_float_ps.get();
         s.sasrt_depth_float_pipeline = s.device->createGraphicsPipeline(desc);
+        plume::RenderGraphicsPipelineDesc float_only = desc;
+        float_only.renderTargetCount = 1;
+        s.sasrt_depth_float_only_pipeline = s.device->createGraphicsPipeline(float_only);
       }
       if (s.sasrt_depth_float_pipeline)
         s.sasrt_depth_float_pipeline->setName("sasrt depth resolve, the float alone");
+      if (s.sasrt_depth_float_only_pipeline)
+        s.sasrt_depth_float_only_pipeline->setName("dmc depth resolve, 1-RT float only");
     }
   }
   return true;

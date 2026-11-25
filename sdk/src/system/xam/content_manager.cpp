@@ -939,12 +939,15 @@ X_RESULT ContentManager::InstallContent(const std::filesystem::path& package_pat
     }
   }
 
-  // Compute license mask from STFS header licenses
+  // Compute license mask from STFS header licenses (fallback to all granted if zero).
   uint32_t license_mask = 0;
   for (size_t i = 0; i < 0x10; i++) {
     if (device->header().header.licenses[i].license_flags) {
       license_mask |= device->header().header.licenses[i].license_bits;
     }
+  }
+  if (license_mask == 0) {
+    license_mask = 0xFFFFFFFFu;
   }
 
   // Write .header file

@@ -6,16 +6,19 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <mutex>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include <fmt/format.h>  // blur-nx (2026-11-13): WaitReport
 
 // Counter 0 of the console profiler: presented frames, which the Status Monitor overlay's FPS (SaltyNX) and the
 // profiler's "game N fps" are made from (sdk/src/ui/switch_perf.cpp; a stub on the PC, me_pc_stubs.cpp).
 extern "C" void RexSwitchPerfCount(unsigned id);
+extern "C" void RexSwitchPerfHitch(uint64_t start_tick, uint64_t end_tick);
 
 #include "profiler/profiler.h"                      // the on-screen profiler's GPU, present and render thread rows
 #include "renut_engine/gpu/banjo_renut_tuning.h"  // the [renut] report and its in-run A/B
@@ -108,10 +111,29 @@ struct SlowFrame {
 };
 constexpr int kSlowKept = 5;
 
+struct RingEntry {
+  double frame_ms = 0.0;
+  double cpu_active_ms = 0.0;
+  double wait_ms[4] = {};
+  double render_ms = 0.0;
+  double gpu_ms = 0.0;
+};
+
+inline uint64_t ReadSystemTick() {
+#if defined(__SWITCH__) && defined(__aarch64__)
+  uint64_t v = 0;
+  asm volatile("mrs %0, cntpct_el0" : "=r"(v));
+  return v;
+#else
+  return 0;
+#endif
+}
+
 struct State {
   std::mutex mutex;
   Snapshot snap;
   Clock::time_point last_frame{};
+  uint64_t last_tick = 0;
   Clock::time_point window_start{};
   int window_frames = 0;
   double window_worst = 0.0;
@@ -127,6 +149,9 @@ struct State {
   Hist game, render, gpu;
   SlowFrame slow[kSlowKept];
   int slow_n = 0;
+  RingEntry ring[PacingSnapshot::kRing]{};
+  int ring_head = 0;
+  int ring_count = 0;
   double frame_wait[4] = {}, frame_render = 0.0, frame_gpu = 0.0;
   double other_wait_ms = 0.0;  // waits reported by other threads (a fence a worker waited for)
   uint64_t other_wait_n = 0;
@@ -150,8 +175,12 @@ void OnGameFrame() {
   State& s = S();
   std::lock_guard lock(s.mutex);
   const auto now = Clock::now();
+  const uint64_t now_tick = ReadSystemTick();
   if (s.last_frame != Clock::time_point{}) {
     const double ms = std::chrono::duration<double, std::milli>(now - s.last_frame).count();
+    if (ms > 45.0 && s.last_tick != 0 && now_tick > s.last_tick) {
+      RexSwitchPerfHitch(s.last_tick, now_tick);
+    }
     Snapshot& snap = s.snap;
     if (snap.history_count < Snapshot::kHistory) {
       snap.history[snap.history_count++] = float(ms);
@@ -159,6 +188,18 @@ void OnGameFrame() {
       std::copy(snap.history + 1, snap.history + Snapshot::kHistory, snap.history);
       snap.history[Snapshot::kHistory - 1] = float(ms);
     }
+    // Push into 256-frame pacing ring buffer.
+    RingEntry entry;
+    entry.frame_ms = ms;
+    const double wait_total = s.frame_wait[0] + s.frame_wait[1] + s.frame_wait[2] + s.frame_wait[3];
+    entry.cpu_active_ms = std::max(0.0, ms - wait_total);
+    std::copy(s.frame_wait, s.frame_wait + 4, entry.wait_ms);
+    entry.render_ms = s.frame_render;
+    entry.gpu_ms = s.frame_gpu;
+    s.ring[s.ring_head] = entry;
+    s.ring_head = (s.ring_head + 1) % PacingSnapshot::kRing;
+    if (s.ring_count < PacingSnapshot::kRing) ++s.ring_count;
+
     s.window_worst = std::max(s.window_worst, ms);
     ++s.window_frames;
     // blur-nx (2026-11-18, the frame pacing): the frame to the histogram, and to the slowest kept (longest first).
@@ -181,6 +222,7 @@ void OnGameFrame() {
     s.first_frame = s.pacing_start = now;
   }
   s.last_frame = now;
+  s.last_tick = now_tick;
   s.game_thread = std::this_thread::get_id();
   std::fill(s.frame_wait, s.frame_wait + 4, 0.0);
   s.frame_render = s.frame_gpu = 0.0;
@@ -314,6 +356,77 @@ Snapshot Get() {
   State& s = S();
   std::lock_guard lock(s.mutex);
   return s.snap;
+}
+
+PacingSnapshot GetPacingSnapshot() {
+  PacingSnapshot out{};
+  RingEntry copy[PacingSnapshot::kRing];
+  int n = 0;
+  int head = 0;
+  {
+    State& s = S();
+    std::lock_guard lock(s.mutex);
+    n = s.ring_count;
+    head = s.ring_head;
+    std::copy(s.ring, s.ring + PacingSnapshot::kRing, copy);
+  }
+  out.count = n;
+  if (n <= 0) return out;
+
+  const int newest = (head + PacingSnapshot::kRing - 1) % PacingSnapshot::kRing;
+  out.cur_cpu_active_ms = copy[newest].cpu_active_ms;
+  for (int k = 0; k < 4; ++k) out.cur_wait_ms[k] = copy[newest].wait_ms[k];
+  out.cur_render_ms = copy[newest].render_ms;
+  out.cur_gpu_ms = copy[newest].gpu_ms;
+
+  std::vector<double> sorted;
+  sorted.reserve(size_t(n));
+  double sum_frame = 0.0, sum_cpu = 0.0, sum_render = 0.0, sum_gpu = 0.0;
+  double sum_wait[4] = {};
+  int render_n = 0, gpu_n = 0;
+  const int start = n < PacingSnapshot::kRing ? 0 : head;
+  for (int i = 0; i < n; ++i) {
+    const RingEntry& e = copy[(start + i) % PacingSnapshot::kRing];
+    sorted.push_back(e.frame_ms);
+    sum_frame += e.frame_ms;
+    sum_cpu += e.cpu_active_ms;
+    for (int k = 0; k < 4; ++k) sum_wait[k] += e.wait_ms[k];
+    if (e.render_ms > 0.0) {
+      sum_render += e.render_ms;
+      ++render_n;
+    }
+    if (e.gpu_ms > 0.0) {
+      sum_gpu += e.gpu_ms;
+      ++gpu_n;
+    }
+    if (e.frame_ms > 45.0) ++out.hitches;
+    const int vb = std::max(1, int(std::lround(e.frame_ms / 16.6667)));
+    ++out.vblanks[std::min(vb, 5) - 1];
+  }
+  std::sort(sorted.begin(), sorted.end());
+  out.best_ms = sorted.front();
+  out.worst_ms = sorted.back();
+  out.median_ms = (n & 1) ? sorted[size_t(n / 2)] : 0.5 * (sorted[size_t(n / 2 - 1)] + sorted[size_t(n / 2)]);
+  const double mean_ms = sum_frame / double(n);
+  out.avg_fps = mean_ms > 0.0 ? 1000.0 / mean_ms : 0.0;
+
+  const int slow_k = std::max(1, n / 100);
+  double slow_sum = 0.0;
+  for (int i = n - slow_k; i < n; ++i) slow_sum += sorted[size_t(i)];
+  const double slow_mean = slow_sum / double(slow_k);
+  out.low_1pct_fps = slow_mean > 0.0 ? 1000.0 / slow_mean : 0.0;
+
+  const double stutter_thresh = out.median_ms * 2.0;
+  if (stutter_thresh > 0.0) {
+    for (double v : sorted) {
+      if (v > stutter_thresh) ++out.stutters;
+    }
+  }
+  out.avg_cpu_active_ms = sum_cpu / double(n);
+  for (int k = 0; k < 4; ++k) out.avg_wait_ms[k] = sum_wait[k] / double(n);
+  out.avg_render_ms = render_n ? sum_render / double(render_n) : 0.0;
+  out.avg_gpu_ms = gpu_n ? sum_gpu / double(gpu_n) : 0.0;
+  return out;
 }
 
 }  // namespace renut::frame_stats

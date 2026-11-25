@@ -206,6 +206,8 @@ set(RENUT_SOURCES
     src/build_stamp.cpp  # port 193: the build stamp, the first line of every log (cmake/build_stamp.cmake)
     src/katamari_keys.cpp
     src/game_menu.cpp  # blur-nx (2026-11-18): the game menu (A+B+X+Y+L+R on the Switch, F8 on the PC)
+    src/dmc_startup_overlay.cpp
+    src/dmc_wwise_fix.cpp
     src/blur_small_alloc.cpp  # blur-nx (2026-11-17, #220; port 151): small C++ allocations per thread (Switch; 32 MB)
     # katamari-nx (2026-10-31): DLC packages in the "dlc" folder next to the NRO installed at start (reNut upstream's).
     src/renut_engine/dlc_install.cpp
@@ -295,6 +297,10 @@ add_custom_target(renut_build_stamp
 add_dependencies(renut renut_build_stamp)
 target_include_directories(renut PRIVATE "${RENUT_BUILD_STAMP_DIR}")
 set_source_files_properties(src/build_stamp.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
+set_source_files_properties(src/dmc_startup_overlay.cpp PROPERTIES
+    SKIP_PRECOMPILE_HEADERS ON
+    OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/instller.jpg;${CMAKE_CURRENT_SOURCE_DIR}/assets/intro.png"
+)
 
 # GPU_PLUGINS stages the emulated-GPU backend (rexgpu-xenos.dll) next to the exe.
 # It is only used when the gpu_plugin cvar is "xenos"; empty means no GPU at all
@@ -319,7 +325,7 @@ endif()
 # so the recompiled game's floating point drifted from the Xbox 360 and from the PC build (x86-64-v2 has no FMA), and
 # type-punned guest register/memory accesses relied on strict aliasing. The native game-function replacements are
 # checked against the recompiled code built this way.
-foreach(_banjo_target renut renut_recomp)
+foreach(_banjo_target renut renut_recomp renut_NTJobCode)
     if(TARGET ${_banjo_target})
         target_compile_options(${_banjo_target} PRIVATE -ffp-contract=off -fno-strict-aliasing)
     endif()
@@ -339,11 +345,17 @@ option(BANJO_GENERATED_MATH_FLAGS "-fno-math-errno on the generated game code" O
 option(BANJO_GENERATED_NO_TRAPPING_MATH "-fno-trapping-math on the generated game code (not exact, see the comment)" OFF)
 if(BANJO_GENERATED_MATH_FLAGS AND TARGET renut_recomp AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(renut_recomp PRIVATE -fno-math-errno)
+    if(TARGET renut_NTJobCode)
+        target_compile_options(renut_NTJobCode PRIVATE -fno-math-errno)
+    endif()
     # banjo-nx (2026-11-19, the rebase; blur-nx's BLUR_NO_TRAPPING_MATH form, 2026-11-16, CG-26): only with
     # BLUR_FPCR_ONE_MODE (no flush-mode switches left in game code), and the files that write the guest FPSCR keep
     # -ftrapping-math (tools/fp_env_files.py's list, below the round definitions).
     if(BANJO_GENERATED_NO_TRAPPING_MATH AND BLUR_FPCR_ONE_MODE)
         target_compile_options(renut_recomp PRIVATE -fno-trapping-math)
+        if(TARGET renut_NTJobCode)
+            target_compile_options(renut_NTJobCode PRIVATE -fno-trapping-math)
+        endif()
     endif()
 endif()
 if(BANJO_GENERATED_NO_TRAPPING_MATH AND NOT BLUR_FPCR_ONE_MODE)

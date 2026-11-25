@@ -480,10 +480,7 @@ std::unique_ptr<plume::RenderPipeline> Build(const PipelineKey &key, const Pipel
   // first four bound fetches, from its key (render/draw.cpp FetchSpecWords): this game's terrain draws up to 580,000 vertices a frame.
   else if (key.tess_kind)
     spec[spec_count++] = plume::RenderSpecConstant(904, key.tess_kind);
-  // renut-ultimate (port 44, 2026-11-08; sasrt-nx's sasrt_gpu_plain_fetches): the fetch constants without signs, gamma
-  // or exponent adjust.
-  if (key.pixel_shader && key.fetch_pad)
-    spec[spec_count++] = plume::RenderSpecConstant(926, key.fetch_pad);
+  // (#58 audit: constant 926 is already pushed once at lines 471-474 above; duplicate push removed)
   for (uint32_t k = 0; k < 4; ++k) {
     if (key.fetch_types[k])
       spec[spec_count++] = plume::RenderSpecConstant(920 + k, key.fetch_types[k]);

@@ -29,6 +29,29 @@ struct Snapshot {
     int history_count = 0;
 };
 
+struct PacingSnapshot {
+    static constexpr int kRing = 256;
+    int count = 0;
+    double best_ms = 0.0;
+    double worst_ms = 0.0;
+    double median_ms = 0.0;
+    double avg_fps = 0.0;
+    double low_1pct_fps = 0.0;
+    int stutters = 0;          // frames > 2x median_ms
+    int hitches = 0;           // frames > 45 ms
+    int vblanks[5] = {};       // 1, 2, 3, 4, 5+ vblanks (16.6667 ms each)
+    double cur_cpu_active_ms = 0.0;
+    double avg_cpu_active_ms = 0.0;
+    double cur_wait_ms[4] = {};  // 0: fences, 1: Swap ahead, 2: display, 3: limiter
+    double avg_wait_ms[4] = {};
+    double cur_render_ms = 0.0;
+    double avg_render_ms = 0.0;
+    double cur_gpu_ms = 0.0;
+    double avg_gpu_ms = 0.0;
+};
+
+PacingSnapshot GetPacingSnapshot();
+
 // Called by the renderer at each guest D3DDevice_Swap.
 void OnGameFrame();
 

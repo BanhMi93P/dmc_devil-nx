@@ -728,16 +728,16 @@ std::unique_ptr<DekoCompiler> DekoCompiler::CompileBest(pipeline_stage stage, co
 std::unique_ptr<DekoCompiler> DekoCompiler::TryRescue(std::unique_ptr<DekoCompiler> best, pipeline_stage stage,
 	int optLevel, unsigned flags, const char* glsl)
 {
-	if (!best || !(flags & 2048) || best->m_dkph.num_gprs <= 56 || strstr(glsl, "SPIRV_CROSS_CONSTANT_ID_910 1u"))
+	if (!best || !(flags & 2048) || best->m_dkph.num_gprs <= 40 || strstr(glsl, "SPIRV_CROSS_CONSTANT_ID_910 1u"))
 		return best;
-	static const unsigned add = 2048u | 4096u | 65536u | 131072u | 262144u | 524288u;
+	static const unsigned add = 64u | 2048u | 4096u | 65536u | 131072u | 262144u | 524288u;
 	const unsigned sets[2] = {
 		(flags | add) & ~16u,
 		(flags | add | 16384u | 32768u) & ~(16u | 8192u),
 	};
 	for (unsigned set : sets)
 	{
-		if (best->m_dkph.num_gprs <= 56)
+		if (best->m_dkph.num_gprs <= 40)
 			break;
 		nv50_ir_set_banjo_flags(set);
 		std::unique_ptr<DekoCompiler> alt(new DekoCompiler(stage, optLevel));

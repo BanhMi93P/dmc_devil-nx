@@ -497,6 +497,8 @@ std::string ConvertReuseReport();  // banjo-nx (2026-10-26, banjo_renut_convert_
 // Once per guest Swap: ages the converted vertex stream cache and drops the
 // streams no draw has read for a while.
 void AdvanceStreamCacheFrameLocked();
+bool DrawStackedResolveLocked(struct HostTexture &dest, struct HostTexture &source, uint32_t copy_w,
+                              uint32_t copy_h, uint32_t layers, uint32_t guest_stride_y);
 
 // For the memory report: the converted vertex stream and index caches (the
 // pool's host memory and what the copies in it take).

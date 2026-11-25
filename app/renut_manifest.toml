@@ -3,13 +3,13 @@ sdk_version = "0.10.0"
 name = "renut"
 
 [entrypoint]
-file_path = "../../game/default.xex"
+file_path = "../out/tu1_xex/default.xex"
 out_directory_path = "generated"
 includes = [
  "renut_config.toml"
 ]
 
 [[modules]]
-file_path = "../../game/Binaries/NTJobCode/xenon/submission/NTJobCode.xex"
+file_path = "../out/tu1_xex/Binaries/NTJobCode/xenon/submission/NTJobCode.xex"
 guest_path = "game:\\BINARIES\\NTJOBCODE\\XENON\\SUBMISSION\\NTJOBCODE.XEX"
 out_directory_path = "generated/ntjobcode"

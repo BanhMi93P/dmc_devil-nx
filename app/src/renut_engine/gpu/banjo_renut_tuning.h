@@ -92,6 +92,15 @@ struct Latched {
   bool small_captures = false;
   bool delta_masks = false;
   bool delta_prefetch = false;  // bangaio-nx (2026-10-29, v6)
+  // DmC-NX GPU batch A/B switches
+  bool dmc_stencil_keep_readonly = true;
+  bool dmc_clear_handover_selective = true;
+  bool dmc_color_handover_readonly = true;
+  bool dmc_handover_fullscreen_overwrite = true;
+  bool dmc_depth_handover_take_clean_stencil = true;
+  bool dmc_depth_resolve_float_only_fb = true;
+  bool dmc_stacked_resolve_compute = true;
+  bool dmc_resolve_unroll = true;
 };
 extern Latched g_latched;
 extern std::atomic<bool> g_latched_ready;
@@ -509,6 +518,21 @@ void ResolveTraceFrameStart();  // banjo_renut_diag_resolve_trace: the render th
 // banjo-nx (2026-10-19, render-thread proposal 22): inline (read per resolve, per bind and per target change).
 extern std::atomic<bool> g_trace_frame;
 inline bool ResolveTraceOn() { return g_trace_frame.load(std::memory_order_relaxed); }  // this frame is traced  // banjo_renut_diag_build_delay_ms (a test): a wait before every pipeline build
+
+// DmC-NX one-shot Frame Capture Diag (triggered from +/- menu; logs/frame_diag_<seq>.log).
+void RequestFrameDiagCapture();
+bool ConsumeFrameDiagCapture();
+void WriteFrameDiagFile(const std::string &contents);
+
+// DmC-NX GPU optimization batch A/B getters (all pixel-identical, default true).
+[[gnu::always_inline]] inline bool DmcStencilKeepReadonlyOn() { return Latch().dmc_stencil_keep_readonly && g_ab_off_plain != 256; }
+[[gnu::always_inline]] inline bool DmcClearHandoverSelectiveOn() { return Latch().dmc_clear_handover_selective && g_ab_off_plain != 257; }
+[[gnu::always_inline]] inline bool DmcColorHandoverReadonlyOn() { return Latch().dmc_color_handover_readonly && g_ab_off_plain != 258; }
+[[gnu::always_inline]] inline bool DmcHandoverFullscreenOverwriteOn() { return Latch().dmc_handover_fullscreen_overwrite && g_ab_off_plain != 259; }
+[[gnu::always_inline]] inline bool DmcDepthHandoverTakeCleanStencilOn() { return Latch().dmc_depth_handover_take_clean_stencil && g_ab_off_plain != 260; }
+[[gnu::always_inline]] inline bool DmcDepthResolveFloatOnlyFbOn() { return Latch().dmc_depth_resolve_float_only_fb && g_ab_off_plain != 261; }
+[[gnu::always_inline]] inline bool DmcStackedResolveComputeOn() { return Latch().dmc_stacked_resolve_compute && g_ab_off_plain != 262; }
+[[gnu::always_inline]] inline bool DmcResolveUnrollOn() { return Latch().dmc_resolve_unroll && g_ab_off_plain != 263; }
 
 // Around the plume device (backend/video.cpp): before it is created, after, and at shutdown once the prebuild has
 // stopped and the queue is idle.

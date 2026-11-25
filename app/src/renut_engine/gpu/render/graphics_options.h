@@ -34,7 +34,12 @@ namespace renut::gpu {
 
 // Reads the options; the rest use what it read. Once a frame, with the render
 // resolution (LatchResolutionScaleLocked), so a frame never mixes them.
-void LatchGraphicsOptionsLocked();
+// Returns true if any target-keying option changed (surfaces.cpp bumps g_surface_epoch).
+bool LatchGraphicsOptionsLocked();
+
+// DmC shadow caster suppression when dmc_env_shadows / dmc_char_shadows is "Off".
+bool IsShadowDrawingSuppressed(uint32_t format_word, uint32_t width, uint32_t height);
+bool IsShadowDrawingSuppressed(const d3d::SurfaceDesc &depth_desc);
 
 // The render scale of the target 'desc' describes, given the render
 // resolution's.

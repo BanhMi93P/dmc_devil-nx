@@ -1,10 +1,8 @@
-# DmC - Devil May Cry: named function boundaries and register-sharing overrides.
+# DmC - Devil May Cry (TU1 0.0.1.7): named function boundaries and register-sharing overrides.
 [functions]
-# First codegen: 7 standalone functions reached by tail branches (b target) that the scanner left unclaimed.
-"0x832ED240" = { }  # branched to from 0x832F163C
-"0x82725E80" = { }  # branched to from 0x8298D738, 0x82C9AEE0, 0x8298DBF0
-"0x830EC6D0" = { }  # branched to from 0x830E27C4
-"0x82A224D0" = { }  # branched to from 0x82A2993C
-"0x833B6A40" = { }  # branched to from 0x8336C470
-"0x834AD1B0" = { }  # branched to from 0x834AD31C
-"0x82C5AD00" = { }  # branched to from 0x82C43AD4
+# First TU1 codegen: 5 standalone functions reached by tail branches (b target) that the scanner left unclaimed.
+"0x834B7100" = { }  # branched to from 0x834B726C
+"0x832F6FD8" = { }  # branched to from 0x832FB414
+"0x82C5DDB0" = { }  # branched to from 0x82C46C84
+"0x830F6500" = { }  # branched to from 0x830EC4D4
+"0x833C09F8" = { }  # branched to from 0x83376268

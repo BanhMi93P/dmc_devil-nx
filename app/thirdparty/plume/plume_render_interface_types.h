@@ -183,6 +183,8 @@ namespace plume {
         R5G6B5_UNORM,
         R5G5B5A1_UNORM,
         R4G4B4A4_UNORM,
+        R8G8B8A8_UNORM_SRGB,
+        B8G8R8A8_UNORM_SRGB,
         MAX
     };
 
@@ -571,10 +573,12 @@ namespace plume {
             return 8;
         case RenderFormat::R8G8B8A8_TYPELESS:
         case RenderFormat::R8G8B8A8_UNORM:
+        case RenderFormat::R8G8B8A8_UNORM_SRGB:
         case RenderFormat::R8G8B8A8_UINT:
         case RenderFormat::R8G8B8A8_SNORM:
         case RenderFormat::R8G8B8A8_SINT:
         case RenderFormat::B8G8R8A8_UNORM:
+        case RenderFormat::B8G8R8A8_UNORM_SRGB:
         case RenderFormat::R16G16_TYPELESS:
         case RenderFormat::R16G16_FLOAT:
         case RenderFormat::R16G16_UNORM:
@@ -663,10 +667,12 @@ namespace plume {
         case RenderFormat::R32G32_SINT:
         case RenderFormat::R8G8B8A8_TYPELESS:
         case RenderFormat::R8G8B8A8_UNORM:
+        case RenderFormat::R8G8B8A8_UNORM_SRGB:
         case RenderFormat::R8G8B8A8_UINT:
         case RenderFormat::R8G8B8A8_SNORM:
         case RenderFormat::R8G8B8A8_SINT:
         case RenderFormat::B8G8R8A8_UNORM:
+        case RenderFormat::B8G8R8A8_UNORM_SRGB:
         case RenderFormat::R16G16_TYPELESS:
         case RenderFormat::R16G16_FLOAT:
         case RenderFormat::R16G16_UNORM:

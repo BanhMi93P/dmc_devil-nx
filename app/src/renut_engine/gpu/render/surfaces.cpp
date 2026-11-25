@@ -405,6 +405,8 @@ bool BuildTarget(HostSurface &surface, const d3d::SurfaceDesc &desc, uint32_t mi
 // their size). Between two such changes of a code the frame has drawn at the other one, so a resolve texture still of
 // the old height and sampled after it has gone two changes without a resolve into it.
 RenderScale CodeForHeightLocked(int32_t height) {
+  if (height == 480)
+    return RenderScale{1};
   if (height == 720)
     return RenderScale{};
   if (height == 1080)
@@ -567,7 +569,8 @@ RenderScale ResolutionScale() {
 }
 
 void LatchResolutionScaleLocked() {
-  LatchGraphicsOptionsLocked();
+  if (LatchGraphicsOptionsLocked())
+    ++g_surface_epoch;
   // blur-nx (2026-11-18, the game menu: MSAA at once): the level once a frame; a change makes the MSAA targets anew (their
   // key has it), the old ones retired as idle targets are.
   if (const uint32_t level = banjo::renut_gpu::MsaaLevel(); level != g_msaa_latched) {
@@ -614,6 +617,8 @@ void LatchResolutionScaleLocked() {
       bool dynamic[2];  // banjo-nx (2026-10-28): banjo_renut_dynamic_resolution's range for [handheld, docked]
     } heights = [] {
       auto pick = [](int32_t want, const char *name) {
+        if (want == 480)
+          return 480;
         const int32_t h = std::clamp((std::clamp(want, 360, 1080) + 4) / 9 * 9, 360, 1080);
         if (h != want)
           RGPU_INFO("banjo_renut_render_height_{} = {}: {} (a multiple of 9 from 360 to 1080)", name, want, h);
@@ -744,7 +749,9 @@ void LatchResolutionScaleLocked() {
 #if defined(PLUME_DEKO3D)
     // blur-nx (2026-11-18, the game menu: the resolutions at once): the configured heights read at every latch, rounded
     // as at start; CodeForHeightLocked gives a new one a code (the dynamic resolution's way), its targets made anew.
-    auto rounded = [](int32_t want) { return std::clamp((std::clamp(want, 360, 1080) + 4) / 9 * 9, 360, 1080); };
+    auto rounded = [](int32_t want) {
+      return want == 480 ? 480 : std::clamp((std::clamp(want, 360, 1080) + 4) / 9 * 9, 360, 1080);
+    };
     const int32_t configured = docked ? rounded(banjo::renut_gpu::RenderHeightDocked())
                                       : rounded(banjo::renut_gpu::RenderHeightHandheld());
 #else

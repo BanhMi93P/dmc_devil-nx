@@ -26,9 +26,10 @@ kernel_scatter_read_offset_zero = true
 
 # Latency, pacing & allocator safety
 banjo_async_present = false
+rr6_frames_ahead = 0
 blur_small_alloc_mb = 0
-banjo_system_core = 0
-banjo_system_core_uam = false
+banjo_system_core = 2
+banjo_system_core_uam = true
 banjo_deko3d_compile_wait_boost = false
 audio_xma_kick_without_lock = false
 
@@ -54,15 +55,46 @@ banjo_display_sync = true
 banjo_display_phase_auto = true
 banjo_display_phase_max_us = 12000
 
+# Wave 2 & 3 GPU/shader defaults (HW sRGB, 32-bit 7e3 RG11B10, VSync off, Maxwell tile binning, lazy depth, cached commands, 2x AF)
+dmc_gpu_hw_srgb = true
+renut_format_7e3_rg11b10 = true
+renut_vsync = false
+vivapinata_depth_resolve_skip_unread = true
+banjo_deko3d_eager_kicks = false
+sasrt_gpu_tiled_cache = true
+sasrt_gpu_lazy_depth_resolve = true
+banjo_deko3d_cached_commands = true
+banjo_renut_anisotropy_cap = 2
+banjo_renut_dynamic_handheld_low = 480
+banjo_renut_dynamic_handheld_high = 720
+sasrt_dynamic_lines_handheld = 18
+banjo_renut_dynamic_docked_low = 720
+banjo_renut_dynamic_docked_high = 1080
+banjo_renut_dynamic_gpu_ms = 32.5
+
 # DLC & license
 dlc_enabled = true
 renut_dlc_folder = "dlc"
-license_mask = 1
+license_mask = 4294967295
 input_xbox_layout = false
+input_menu_combo = "PLUS+MINUS"
+renut_resolution = "720p"
+banjo_renut_dynamic_resolution = false
+banjo_renut_dynamic_resolution_handheld = false
+banjo_renut_dynamic_resolution_docked = false
+banjo_renut_smaa = false
+msaa_level = 1
+dmc_env_shadows = "0.67x"
+dmc_char_shadows = "0.67x"
 
-# Release logging defaults (override in dmc_devil.toml when capturing logs)
+# Release logging defaults (override in dmc_devil.toml / renut_ab.toml when capturing logs)
 log_level = "warn"
 log_file_writer = false
+renut_gpu_profile = 0.0
+banjo_renut_diag_gpu_shaders = false
+sasrt_gpu_diag_profile_vs = false
+sasrt_deko3d_diag_barriers = false
+banjo_deko3d_log_misses = false
 banjo_show_profiler = false
 banjo_show_fps = false
 banjo_cpu_profiler = false

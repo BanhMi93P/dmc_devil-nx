@@ -1093,23 +1093,23 @@ void RegisterGuestDeclaration(u32 declaration_va, const GuestVertexElement *elem
 }  // namespace
 
 // void XGRegisterVertexShader(D3DVertexShader*, void *pPhysicalPart) [sub_82536830]
-DMC_RENUT_HOOK_RAW(sub_82536830) {
+DMC_RENUT_HOOK_RAW(sub_825368A0) {
   const u32 shader = ctx.r3.u32, physical = ctx.r4.u32;
-  __imp__sub_82536830(ctx, base);
+  __imp__sub_825368A0(ctx, base);
   RegisterGuestShader(shader, physical, false);
 }
 
 // void XGRegisterPixelShader(D3DPixelShader*, void *pPhysicalPart) [sub_825365F8]
-DMC_RENUT_HOOK_RAW(sub_825365F8) {
+DMC_RENUT_HOOK_RAW(sub_82536668) {
   const u32 shader = ctx.r3.u32, physical = ctx.r4.u32;
-  __imp__sub_825365F8(ctx, base);
+  __imp__sub_82536668(ctx, base);
   RegisterGuestShader(shader, physical, true);
 }
 
 // D3DVertexDeclaration *D3DDevice_CreateVertexDeclaration(const D3DVERTEXELEMENT9*) [sub_82536C00]
-DMC_RENUT_HOOK_RAW(sub_82536C00) {
+DMC_RENUT_HOOK_RAW(sub_82536C70) {
   const u32 elements_va = ctx.r3.u32;
-  __imp__sub_82536C00(ctx, base);
+  __imp__sub_82536C70(ctx, base);
   const u32 declaration = ctx.r3.u32;
   if (const auto *elements = declaration ? GuestPtr<const GuestVertexElement>(elements_va) : nullptr)
     RegisterGuestDeclaration(declaration, elements);
@@ -1117,11 +1117,11 @@ DMC_RENUT_HOOK_RAW(sub_82536C00) {
 
 // void D3DVertexShader_Bind(D3DVertexShader *pShader, DWORD Flags,
 //     D3DVertexDeclaration *pDecl, const DWORD *pStreamStrides, D3DPixelShader *pPixelShader) [sub_82543700]
-DMC_RENUT_HOOK_RAW(sub_82543700) {
+DMC_RENUT_HOOK_RAW(sub_82543770) {
   const u32 shader_va = ctx.r3.u32;
   const u32 declaration_va = ctx.r5.u32;
   const u32 strides_va = ctx.r6.u32;
-  __imp__sub_82543700(ctx, base);
+  __imp__sub_82543770(ctx, base);
 
   const auto *words = declaration_va ? GuestPtr<const be_u32>(declaration_va) : nullptr;
   const auto *elements = declaration_va ? GuestPtr<const GuestVertexElement>(declaration_va + 52) : nullptr;

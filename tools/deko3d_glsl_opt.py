@@ -1190,75 +1190,11 @@ def pass_earlyz(text):
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# pass: plainfetch — a fetch's sign, gamma and exponent code dropped where the draw's fetch words have none
-# (sasrt-nx, 2026-11-08, the GPU round after the move to the ultimate base: sasrt_gpu_plain_fetches, constant 926)
-
-PLAINFETCH_DECL = ('#ifndef SPIRV_CROSS_CONSTANT_ID_926\n#define SPIRV_CROSS_CONSTANT_ID_926 0u\n#endif\n'
-                   'const uint g_sasrtPlainFetch = SPIRV_CROSS_CONSTANT_ID_926;\n')
-_PF_COND = r'(?:!\(\((_\d+) \| (_\d+)\) != 0u\)|(_\d+))'
-_PF_BLOCK = re.compile(r'bool (_\d+);\s*if \(' + _PF_COND + r'\)\s*\{\s*\1 = (_\d+) != 0;\s*\}\s*else\s*\{\s*\1 = true;\s*\}')
-_PF_NOT = r'bool {v} = !\(\((_\d+) \| (_\d+)\) != 0u\);'
-_PF_SIGNS = r'uint {v} = \(g_UboShared\.v\[(\d+)u\]\.([xyzw]) >> 16u\) & 15u;'
-_PF_GAMMA = r'uint {v} = \(g_UboShared\.v\[(\d+)u\]\.([xyzw]) >> 13u\) & 7u;'
-_PF_EXP = r'int {v} = int\(g_UboShared\.v\[(\d+)u\]\.([xyzw]) << 6u\) >> 26;'
-
-
-def _pf_byte(m):
-    return int(m.group(1)) * 16 + 'xyzw'.index(m.group(2)) * 4
-
-
-def pass_plainfetch(text):
-    """Renut's texture fetches apply Xenos' per-fetch-constant signs and gamma (SharedConstants.sampler_indices bits
-    13-19: v[24 + r / 4]) and the exponent adjust (texture_indices bits 20-25: v[r / 4] for a 2D fetch) to the texel in
-    a block that runs only when the fetch constant has any; for every other fetch the block is skipped and the texel is
-    used as it is. The block is a uniform branch, but its temporaries count in the shader's registers (the race's
-    G-buffer shader 33 GPRs with them, 28 without; the final pass 42 and 31). Constant 926, bit r: the draw's words for
-    fetch constant r have none of the three (render/draw.cpp SasrtPlainFetchMask), so the block's condition is false at
-    compile time and uam drops it. Its default 0 leaves every block as it was. Same pixels: the condition was false for
-    that draw anyway."""
-    if 'SPIRV_CROSS_CONSTANT_ID_926' in text or '>> 16u) & 15u;' not in text:
-        return text
-    is_vertex = re.search(r'\bgl_Position\b', text) is not None  # vivapinata-nx (2026-11-12): vertex shaders too
-    edits = []
-    for m in _PF_BLOCK.finditer(text):
-        b, x, y, p, e = m.group(1), m.group(2), m.group(3), m.group(4), m.group(5)
-        if p:
-            mn = re.search(_PF_NOT.format(v=re.escape(p)), text)
-            if not mn:
-                continue
-            x, y = mn.group(1), mn.group(2)
-        ms = re.search(_PF_SIGNS.format(v=re.escape(x)), text)
-        mg = re.search(_PF_GAMMA.format(v=re.escape(y)), text)
-        me = re.search(_PF_EXP.format(v=re.escape(e)), text)
-        if not (ms and mg and me):
-            continue
-        sb, gb, eb = _pf_byte(ms), _pf_byte(mg), _pf_byte(me)
-        r = (sb - 384) // 4
-        # the words of one fetch constant r: sampler_indices[r] (bytes 384-511) for both, texture_indices[d][r] (d the
-        # fetch's dimension, bytes 0-383) for the exponent
-        if sb != gb or not 384 <= sb < 512 or eb >= 384 or eb % 128 != 4 * r:
-            continue
-        # vivapinata-nx (2026-11-12, A/B 150): a samplerk read (its line after SK_MARK) skips its block only with 975
-        gate = f'((g_sasrtPlainFetch >> {r}u) & 1u) == 0u'
-        # 2026-11-12: and every fetch of a vertex shader (926 says the vertex shader's fetches too only since the shader
-        # round, render/draw.cpp SasrtPlainFetchMask's vs_entry)
-        if text[:ms.start()].rstrip().endswith(SK_MARK) or is_vertex:
-            gate = f'(!g_vivaRound || {gate})'
-        edits.append((m.end(), f'\n    {b} = {b} && {gate};'))
-    if not edits:
-        return text
-    for at, code in reversed(edits):
-        text = text[:at] + code + text[at:]
-    text = insert_globals(text, PLAINFETCH_DECL)
-    return with_viva_round(text) if '(!g_vivaRound || ' in text else text
-
-
-# ---------------------------------------------------------------------------------------------------------------------
 # pass: fetchconv — a fetch's sign, gamma and exponent words as constants of the draw (sasrt-nx, 2026-11-09, the fifth GPU
 # round: sasrt_gpu_fetch_conversion_spec, constants 950-957)
 
-_FC_SIGNS = re.compile(r'^(\s*uint (_\d+) = )(\(g_UboShared\.v\[(2[4-5])u\]\.([xyzw]) >> 16u\) & 15u);$', re.M)
-_FC_GAMMA = re.compile(r'^(\s*uint (_\d+) = )(\(g_UboShared\.v\[(2[4-5])u\]\.([xyzw]) >> 13u\) & 7u);$', re.M)
+_FC_SIGNS = re.compile(r'^(\s*uint (_\d+) = )(\(?g_UboShared\.v\[(2[4-5])u\]\.([xyzw]) >> 16u(?:\) & 15u)?);$', re.M)
+_FC_GAMMA = re.compile(r'^(\s*uint (_\d+) = )(\(?g_UboShared\.v\[(2[4-5])u\]\.([xyzw]) >> 13u(?:\) & 7u)?);$', re.M)
 _FC_EXP = re.compile(r'^(\s*int (_\d+) = )(int\(g_UboShared\.v\[([0-1])u\]\.([xyzw]) << 6u\) >> 26);$', re.M)
 # sasrt-nx (2026-11-09, sasrt_gpu_fetch_exp_3d_spec): the 3D (v[8 + r / 4]) and cube (v[16 + r / 4]) words' exponent
 _FC_EXP3 = re.compile(r'^(\s*int (_\d+) = )(int\(g_UboShared\.v\[(8|9|16|17)u\]\.([xyzw]) << 6u\) >> 26);$', re.M)
@@ -1270,6 +1206,16 @@ def _fc_decl(r):
             f'const bool g_sasrtConvKnown{r} = (g_sasrtConv{r} >> 15u) != 0u;\n')
 
 
+def _fc_uses_within_mask(text, var, def_end, allowed_masks):
+    """True when every read of 'var' after its declaration only tests bits within the field mask."""
+    pat = re.compile(rf'\b{re.escape(var)}\b(?:\s*&\s*(\d+)u)?')
+    for u in pat.finditer(text, def_end):
+        m = u.group(1)
+        if m is None or int(m) not in allowed_masks:
+            return False
+    return True
+
+
 def pass_fetchconv(text):
     """Renut's fetch code reads fetch constant r's signs (sampler_indices[r] bits 16-19: v[24 + r / 4]), gamma (bits 13-15)
     and, for a 2D fetch, the exponent adjust (texture_indices[0][r] bits 20-25: v[r / 4]), and applies each to each
@@ -1278,7 +1224,7 @@ def pass_fetchconv(text):
     words in bits 0-3, 4-6 and 7-12; each read of them becomes the constant, so the selects fold to the conversions this
     draw's texture has on the channels that have them, and the block's condition to false where none (as pass plainfetch,
     which it runs after). Default 0: each read as it was. Same values: the same pixels."""
-    if 'SPIRV_CROSS_CONSTANT_ID_950' in text or '>> 16u) & 15u;' not in text:
+    if 'SPIRV_CROSS_CONSTANT_ID_950' in text or '>> 16u' not in text:
         return text
     used = set()
 
@@ -1289,12 +1235,16 @@ def pass_fetchconv(text):
         r = slot(m, 24)
         if r >= 8:
             return m.group(0)
+        if '& 15u' not in m.group(3) and not _fc_uses_within_mask(text, m.group(2), m.end(), {1, 2, 4, 8, 15}):
+            return m.group(0)
         used.add(r)
         return f'{m.group(1)}g_sasrtConvKnown{r} ? (g_sasrtConv{r} & 15u) : ({m.group(3)});'
 
     def gamma(m):
         r = slot(m, 24)
         if r >= 8:
+            return m.group(0)
+        if '& 7u' not in m.group(3) and not _fc_uses_within_mask(text, m.group(2), m.end(), {1, 2, 4, 7}):
             return m.group(0)
         used.add(r)
         return f'{m.group(1)}g_sasrtConvKnown{r} ? ((g_sasrtConv{r} >> 4u) & 7u) : ({m.group(3)});'
@@ -2721,7 +2671,7 @@ def pass_samplerk(text):
         for shift, mask in (('16u', '15u'), ('13u', '7u')):
             # 2026-11-12 (A/B 150): each rewritten line after a marker line (SK_MARK), by which plainfetch and fetchconv
             # make their folding of it depend on constant 975 (VIVAROUND_DECL)
-            text = re.sub(r'^([ \t]*)(uint _\d+ = )\(' + re.escape(name) + r' >> ' + shift + r'\) & ' + mask + ';$',
+            text = re.sub(r'^([ \t]*)(uint _\d+ = )\(?' + re.escape(name) + r' >> ' + shift + r'(?:\) & ' + mask + r')?;$',
                           lambda mm: f'{mm.group(1)}{SK_MARK}\n{mm.group(1)}{mm.group(2)}({word} >> {shift}) & {mask};',
                           text, flags=re.M)
     return text
@@ -2747,16 +2697,36 @@ def with_viva_round(text):
 
 PLAINFETCH_DECL = ('#ifndef SPIRV_CROSS_CONSTANT_ID_926\n#define SPIRV_CROSS_CONSTANT_ID_926 0u\n#endif\n'
                    'const uint g_sasrtPlainFetch = SPIRV_CROSS_CONSTANT_ID_926;\n')
-_PF_COND = r'(?:!\(\((_\d+) \| (_\d+)\) != 0u\)|(_\d+))'
-_PF_BLOCK = re.compile(r'bool (_\d+);\s*if \(' + _PF_COND + r'\)\s*\{\s*\1 = (_\d+) != 0;\s*\}\s*else\s*\{\s*\1 = true;\s*\}')
-_PF_NOT = r'bool {v} = !\(\((_\d+) \| (_\d+)\) != 0u\);'
-_PF_SIGNS = r'uint {v} = \(g_UboShared\.v\[(\d+)u\]\.([xyzw]) >> 16u\) & 15u;'
-_PF_GAMMA = r'uint {v} = \(g_UboShared\.v\[(\d+)u\]\.([xyzw]) >> 13u\) & 7u;'
+_PF_BLOCK = re.compile(r'bool (_\d+);\s*if \(([^\n;{}]+)\)\s*\{\s*\1 = (_\d+) != 0;\s*\}\s*else\s*\{\s*\1 = true;\s*\}')
+_PF_BOOL_DEF = r'bool {v} = ([^\n;]+);'
+_PF_SPLIT_X = r'uint {v} = (_\d+) & 15u;'
+_PF_SPLIT_Y = r'uint {v} = (_\d+) & 7u;'
+_PF_INNER = re.compile(r'^\(?(?:_\d+|(_\d+))(?:\s*&\s*15u)?\)?\s*\|\s*\(?(?:_\d+|(_\d+))(?:\s*&\s*7u)?\)?$')
+_PF_INNER_EX = re.compile(r'^\(?(_\d+)(?:\s*&\s*15u)?\)?\s*\|\s*\(?(_\d+)(?:\s*&\s*7u)?\)?$')
+_PF_SIGNS = r'uint {v} = \(?g_UboShared\.v\[(\d+)u\]\.([xyzw]) >> 16u(?:\)\s*&\s*15u)?;'
+_PF_GAMMA = r'uint {v} = \(?g_UboShared\.v\[(\d+)u\]\.([xyzw]) >> 13u(?:\)\s*&\s*7u)?;'
 _PF_EXP = r'int {v} = int\(g_UboShared\.v\[(\d+)u\]\.([xyzw]) << 6u\) >> 26;'
 
 
 def _pf_byte(m):
     return int(m.group(1)) * 16 + 'xyzw'.index(m.group(2)) * 4
+
+
+def _pf_unwrap_cond(cond, text):
+    c = cond.strip()
+    if re.fullmatch(r'_\d+', c):
+        mn = re.search(_PF_BOOL_DEF.format(v=re.escape(c)), text)
+        if not mn:
+            return None
+        c = mn.group(1).strip()
+    if c.startswith('!((') and c.endswith(') != 0u)'):
+        inner = c[3:-7].strip()
+    elif c.startswith('(') and c.endswith(') == 0u'):
+        inner = c[1:-7].strip()
+    else:
+        return None
+    mm = _PF_INNER_EX.match(inner)
+    return (mm.group(1), mm.group(2)) if mm else None
 
 
 def pass_plainfetch(text):
@@ -2768,17 +2738,20 @@ def pass_plainfetch(text):
     fetch constant r have none of the three (render/draw.cpp PlainFetchMask), so the block's condition is false at
     compile time and uam drops it. Its default 0 leaves every block as it was. Same pixels: the condition was false for
     that draw anyway."""
-    if 'SPIRV_CROSS_CONSTANT_ID_926' in text or '>> 16u) & 15u;' not in text:
+    if 'SPIRV_CROSS_CONSTANT_ID_926' in text or '>> 16u' not in text:
         return text
     is_vertex = re.search(r'\bgl_Position\b', text) is not None  # vivapinata-nx (2026-11-12): vertex shaders too
     edits = []
     for m in _PF_BLOCK.finditer(text):
-        b, x, y, p, e = m.group(1), m.group(2), m.group(3), m.group(4), m.group(5)
-        if p:
-            mn = re.search(_PF_NOT.format(v=re.escape(p)), text)
-            if not mn:
-                continue
-            x, y = mn.group(1), mn.group(2)
+        b, cond, e = m.group(1), m.group(2), m.group(3)
+        pair = _pf_unwrap_cond(cond, text)
+        if not pair:
+            continue
+        x, y = pair
+        if (sx := re.search(_PF_SPLIT_X.format(v=re.escape(x)), text)):
+            x = sx.group(1)
+        if (sy := re.search(_PF_SPLIT_Y.format(v=re.escape(y)), text)):
+            y = sy.group(1)
         ms = re.search(_PF_SIGNS.format(v=re.escape(x)), text)
         mg = re.search(_PF_GAMMA.format(v=re.escape(y)), text)
         me = re.search(_PF_EXP.format(v=re.escape(e)), text)
@@ -3162,8 +3135,122 @@ def pass_clamp7e3(text):
     code = ''.join(f'if (((g_ult7e3 >> {i}u) & 1u) != 0u) {{ {name} = dk_clamp7e3({name}); }} ' for i, name in outs)
     body = re.sub(r'(?<![\w.])return;', lambda m: '{ ' + code + 'return; }', body)
     body = body.rstrip() + '\n    ' + code.rstrip() + '\n'
-    text = text[:a] + body + text[b:]
-    return insert_globals(insert_before_main(text, CLAMP7E3_FN), CLAMP7E3_DECL)
+    text = insert_globals(insert_before_main(text[:a] + body + text[b:], CLAMP7E3_FN), CLAMP7E3_DECL)
+    return text
+
+
+_RE_BITS_ROUNDTRIP_F = re.compile(r'\buintBitsToFloat\(floatBitsToUint\((_\d+)\)\)')
+_RE_BITS_ROUNDTRIP_U = re.compile(r'\bfloatBitsToUint\(uintBitsToFloat\((_\d+)\)\)')
+_RE_MIX_SAME = re.compile(r'\bmix\((_\d+),\s*\1,\s*[^\(\)]+\)')
+_RE_CLAMP_DUP = re.compile(r'\bclamp\(clamp\(([^,()]+),\s*0\.0,\s*1\.0\),\s*0\.0,\s*1\.0\)')
+_RE_OR_ZERO_U = re.compile(r'\((_\d+)\s*\|\s*0u\)')
+_RE_XOR_ZERO_U = re.compile(r'\((_\d+)\s*\^\s*0u\)')
+_RE_VEC4_ID = re.compile(r'\bvec4\((_\d+)\.x,\s*\1\.y,\s*\1\.z,\s*\1\.w\)')
+
+
+def pass_dmc_wave1(text):
+    """DmC Wave 1 pixel-identical algebraic cleanups (bitcast roundtrips, clamp chains, identity mix/masks)."""
+    text = _RE_BITS_ROUNDTRIP_F.sub(r'\1', text)
+    text = _RE_BITS_ROUNDTRIP_U.sub(r'\1', text)
+    text = _RE_MIX_SAME.sub(r'\1', text)
+    text = _RE_CLAMP_DUP.sub(r'clamp(\1, 0.0, 1.0)', text)
+    text = _RE_OR_ZERO_U.sub(r'\1', text)
+    text = _RE_XOR_ZERO_U.sub(r'\1', text)
+    if '.w)' in text:
+        vec4_vars = set(re.findall(r'\bvec4\s+(_\d+)\s*=', text))
+        if vec4_vars:
+            text = _RE_VEC4_ID.sub(lambda m: m.group(1) if m.group(1) in vec4_vars else m.group(0), text)
+    return text
+
+
+_PWL_BLOCK_RE = re.compile(
+    r'float (_\d+) = clamp\((_\d+(?:\.[xyzw])?), 0\.0, 1\.0\);\s*'
+    r'bool (_\d+) = \1 >= 0\.3764705955982208251953125;\s*'
+    r'bool (_\d+) = \1 >= 0\.752941191196441650390625;\s*'
+    r'bool (_\d+) = \1 >= 0\.2509804069995880126953125;\s*'
+    r'float (_\d+) = dk_sel\(\3, \(dk_sel\(\4, 0\.0078125, 0\.00390625\)\), \(dk_sel\(\5, 0\.001953125, 0\.0009765625\)\)\);\s*'
+    r'float (_\d+) = \(\(\1 \* 261120\.0\) \* \6\) \+ \(dk_sel\(\3, \(dk_sel\(\4, \(-1024\.0\), \(-256\.0\)\)\), \(dk_sel\(\5, \(-64\.0\), 0\.0\)\)\)\);'
+)
+_PWL_FN = (
+    'float dk_pwl_srgb(float v)\n'
+    '{\n'
+    '    float x = clamp(v, 0.0, 1.0);\n'
+    '    return max(max(x * 0.24926686, fma(x, 0.49853372, -0.06256109)),\n'
+    '               max(fma(x, 1.00030547, -0.25146628), fma(x, 2.01384040, -1.01384040)));\n'
+    '}\n\n'
+)
+
+
+def pass_dmc_pwl_fast(text):
+    """Replace Xbox 360 17-op branchy PWL sRGB decode blocks with a branchless 4-segment convex fit."""
+    if '261120.0' not in text or 'dk_pwl_srgb' in text:
+        return text
+    replaced = 0
+    for m in list(_PWL_BLOCK_RE.finditer(text)):
+        v_in, v_s, v_t = m.group(2), m.group(6), m.group(7)
+        use_pat = f'(({v_t} + trunc({v_t} * {v_s})) * 0.000977517105638980865478515625)'
+        if use_pat not in text:
+            continue
+        # Only rewrite when v_s is strictly internal to the matched PWL block and its single trunc use.
+        if len(re.findall(r'\b' + re.escape(v_s) + r'\b', text)) != 3:
+            continue
+        text = text.replace(m.group(0), f'float {v_t} = dk_pwl_srgb({v_in});', 1)
+        text = text.replace(use_pat, v_t, 1)
+        replaced += 1
+    if replaced:
+        text = insert_before_main(text, _PWL_FN)
+    return text
+
+
+_TEX_DECL_RE = re.compile(r'^([ \t]*)vec4 (_\d+) = (texture(?:Lod)?\((dk_tex_b\d+), (_\d+(?:\.[xyzw]+)?)\));$')
+_ASSIGN_RE = re.compile(r'^\s*(?:[a-zA-Z_]\w*\s+)?(_\d+)(?:\.[xyzw]+)?\s*(?:\+|-|\*|/|&|\||\^)?=')
+_CTL_WORDS = ('if ', 'if(', 'else', 'for ', 'for(', 'while ', 'while(', 'do ', 'do{', 'switch', 'case ', 'default:', 'return', 'discard', 'break', 'continue')
+
+
+def pass_dmc_tex_cse(text):
+    """Deduplicate identical straight-line texture() fetches within the same scope block."""
+    if 'texture(' not in text and 'textureLod(' not in text:
+        return text
+    span = main_span(text)
+    if not span:
+        return text
+    a, b = span
+    body_lines = text[a:b].splitlines(True)
+    # Only enable inside straightforward scopes; reset on any control-flow keyword, brace, or write to key vars.
+    seen = {}  # (indent, call_expr) -> (var_name, uv_base)
+    var_to_keys = {}  # var -> list of keys depending on it
+    out = []
+    changed = False
+    for ln in body_lines:
+        stripped = ln.strip()
+        if ('{' in stripped or '}' in stripped or any(stripped.startswith(w) for w in _CTL_WORDS)):
+            seen.clear()
+            var_to_keys.clear()
+            out.append(ln)
+            continue
+        ma = _ASSIGN_RE.match(ln)
+        if ma:
+            lhs = ma.group(1)
+            for k in var_to_keys.pop(lhs, ()):
+                seen.pop(k, None)
+        mt = _TEX_DECL_RE.match(ln.rstrip('\r\n'))
+        if mt:
+            indent, var_dst, call_expr, _tex, uv_expr = mt.groups()
+            uv_base = uv_expr.split('.', 1)[0]
+            key = (indent, call_expr)
+            if key in seen:
+                prev_var, _ = seen[key]
+                nl = '\n' if ln.endswith('\n') else ''
+                out.append(f'{indent}vec4 {var_dst} = {prev_var};{nl}')
+                changed = True
+                continue
+            seen[key] = (var_dst, uv_base)
+            var_to_keys.setdefault(var_dst, []).append(key)
+            var_to_keys.setdefault(uv_base, []).append(key)
+        out.append(ln)
+    if not changed:
+        return text
+    return text[:a] + ''.join(out) + text[b:]
 
 
 PASSES = [
@@ -3215,6 +3302,9 @@ PASSES = [
     ('expwin', pass_expwin),  # sasrt-nx (2026-11-08): the fourth GPU round, constant 944
     ('expparts', pass_expparts),  # sasrt-nx (2026-11-09): an EXPERIMENT, constant 945 (0: as before)
     ('clamp7e3', pass_clamp7e3),  # dishonored-nx (2026-10-31; port 106): constant 990, the last pixel pass
+    ('dmc_wave1', pass_dmc_wave1),  # DmC-NX Wave 1 pixel-identical algebraic cleanups
+    ('dmc_pwl_fast', pass_dmc_pwl_fast),  # DmC-NX Wave 2: 4-segment convex PWL sRGB fit
+    ('dmc_tex_cse', pass_dmc_tex_cse),  # DmC-NX Wave 2: straight-line duplicate texture fetch CSE
     ('invariant', pass_invariant),  # dishonored-nx (2026-10-30; port 100): vertex shaders, no constant
 ]
 # banjo-nx (2026-10-21): scaled targets (648p / 900p): scale1 and fragscale (1x only) are not in the default.
@@ -3225,7 +3315,7 @@ DEFAULT = ','.join(name for name, _ in PASSES if name not in ('scale1', 'fragsca
 # vivapinata-nx (2026-11-12): samplerk, plainfetch, fetchconv, onex and onexsize act on both stages (vertex shaders'
 # fetches through constant 975, render/draw.cpp SasrtPlainFetchMask's vs_entry).
 STAGE_OF = {'earlykill': 'frag', 'noearly': 'frag', 'facesign': 'frag', 'clipspec': 'vert', 'nofxaa': 'frag',
-            'vsepi': 'vert', 'expwin': 'vert', 'expparts': 'vert', 'stack3d': 'frag', 'fetchendian': 'vert', 'expfmt': 'vert', 'skinonce': 'vert', 'bonesel': 'vert', 'aw4': 'vert', 'lightbranch': 'frag', 'nullps': 'frag', 'gpr32': 'frag', 'earlyz': 'frag', 'txq': 'frag', 'alpha': 'frag', 'alphamask': 'frag', 'earlyhoist': 'frag', 'tess': 'vert', 'vsout': 'vert', 'vszero': 'vert', 'pszero': 'frag'}
+            'vsepi': 'vert', 'expwin': 'vert', 'expparts': 'vert', 'stack3d': 'frag', 'fetchendian': 'vert', 'expfmt': 'vert', 'skinonce': 'vert', 'bonesel': 'vert', 'aw4': 'vert', 'lightbranch': 'frag', 'nullps': 'frag', 'gpr32': 'frag', 'earlyz': 'frag', 'txq': 'frag', 'alpha': 'frag', 'alphamask': 'frag', 'earlyhoist': 'frag', 'tess': 'vert', 'vsout': 'vert', 'vszero': 'vert', 'pszero': 'frag', 'dmc_pwl_fast': 'frag', 'dmc_tex_cse': 'frag'}
 STAGE_OF['invariant'] = 'vert'  # dishonored-nx (port 100)
 STAGE_OF['clamp7e3'] = 'frag'  # dishonored-nx (port 106)
 

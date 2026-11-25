@@ -291,26 +291,55 @@ plume::RenderComponentMapping SwizzleMapping(u32 swizzle, bool swap_red_blue,
   return plume::RenderComponentMapping(component(0), component(1), component(2), component(3));
 }
 
+plume::RenderFormat SrgbViewFormat(plume::RenderFormat format) {
+  using F = plume::RenderFormat;
+  switch (format) {
+  case F::BC1_UNORM: return F::BC1_UNORM_SRGB;
+  case F::BC2_UNORM: return F::BC2_UNORM_SRGB;
+  case F::BC3_UNORM: return F::BC3_UNORM_SRGB;
+  case F::R8G8B8A8_UNORM: return F::R8G8B8A8_UNORM_SRGB;
+  case F::B8G8R8A8_UNORM: return F::B8G8R8A8_UNORM_SRGB;
+  default: return F::UNKNOWN;
+  }
+}
+
+bool CanUseHwSrgb(const HostTexture &t, const TextureFetch &device_fetch) {
+  if (!IsDeko3D() || !banjo::renut_gpu::DmcHwSrgbOn() || t.gpu_written || !t.texture)
+    return false;
+  if (SrgbViewFormat(t.host_format) == plume::RenderFormat::UNKNOWN)
+    return false;
+  // Must inspect the exact device_fetch that BindingWords() uses.
+  return device_fetch.Sign(0) == TextureSign::Gamma &&
+         device_fetch.Sign(1) == TextureSign::Gamma &&
+         device_fetch.Sign(2) == TextureSign::Gamma &&
+         device_fetch.Sign(3) != TextureSign::Gamma;
+}
+
 // The bindless slot of 't' seen through 'swizzle': its own view's when that is
 // the swizzle it was made with, else a view made for it (kept with 't').
-uint32_t SlotForSwizzle(HostTexture &t, u32 swizzle) {
-  if (swizzle == t.view_swizzle || !t.texture)
+uint32_t SlotForSwizzle(HostTexture &t, u32 swizzle, bool srgb = false) {
+  if (!t.texture)
+    return srgb ? kInvalidDescriptor : t.slot;
+  if (!srgb && swizzle == t.view_swizzle)
     return t.slot;
   for (const HostTexture::SwizzleView &v : t.swizzle_views) {
-    if (v.swizzle == swizzle)
+    if (v.swizzle == swizzle && v.srgb == srgb)
       return v.slot;
   }
   plume::RenderTextureViewDesc desc = t.view_desc;
   desc.componentMapping = SwizzleMapping(swizzle, t.view_swap_red_blue, t.host_format);
+  if (srgb)
+    desc.format = SrgbViewFormat(t.host_format);
   HostTexture::SwizzleView v;
   v.swizzle = swizzle;
+  v.srgb = srgb;
   v.view = t.texture->createTextureView(desc);
   if (!v.view)
-    return t.slot;
+    return srgb ? kInvalidDescriptor : t.slot;
   v.slot = Video::AllocateTextureSlotLocked();
   if (v.slot == kInvalidDescriptor) {
     Video::RetireLocked(std::move(v.view));
-    return t.slot;
+    return srgb ? kInvalidDescriptor : t.slot;
   }
   Video::SetTextureSlotLocked(v.slot, t.texture.get(), v.view.get());
   t.swizzle_views.push_back(std::move(v));
@@ -856,8 +885,11 @@ bool Create(HostTexture &t, const TextureFetch &fetch, bool render_target,
     t.depth = 1;
     break;
   }
-  if (render_target)
+  const bool stacked_rt = IsDeko3D() && t.stacked && !render_target && !t.info.compressed &&
+                          banjo::renut_gpu::DmcStackedResolveComputeOn();
+  if (render_target || stacked_rt)
     desc.flags |= plume::RenderTextureFlag::RENDER_TARGET;
+  t.stacked_render_target = stacked_rt;
   // banjo-nx (2026-10-20): whether the game uses stacked (2D array) or volume textures at all, once each (SASRT's
   // deko3d findings: plume's 2D view of a 2D array, and 3D images; docs/deko3d-port-faq.md).
   if (t.dimension == TextureDimension::Tex3D) {
@@ -1168,15 +1200,20 @@ void CopyStackedResolve(HostTexture &t, HostTexture &source) {
   FlushResolveMipsLocked(source);
   ++g_texture_epoch;
   plume::RenderCommandList *cmd = State().command_list;
-  TransitionTextureLocked(&source, plume::RenderTextureLayout::COPY_SOURCE);
-  TransitionTextureLocked(&t, plume::RenderTextureLayout::COPY_DEST);
-  u32 bw = 1, bh = 1;
-  FormatBlockSize(t.guest_format, bw, bh);
-  const u32 tile_h = bh * 32;
-  const u32 guest_stride_y = ((t.height + tile_h - 1) / tile_h) * tile_h;
   const uint32_t copy_w = std::min({t.scale.Size(t.width), t.alloc_width, source.alloc_width});
   const uint32_t copy_h = std::min({t.scale.Size(t.height), t.alloc_height});
   const uint32_t layers = StackedLayers(t);
+  u32 bw = 1, bh = 1;
+  FormatBlockSize(t.guest_format, bw, bh);
+  const u32 tile_h = bh * 32;
+  const uint32_t guest_stride_y = ((t.height + tile_h - 1) / tile_h) * tile_h;
+  if (t.stacked_render_target && DrawStackedResolveLocked(t, source, copy_w, copy_h, layers, guest_stride_y)) {
+    t.copied_resolve = source.resolves;
+    t.uploaded = true;
+    return;
+  }
+  TransitionTextureLocked(&source, plume::RenderTextureLayout::COPY_SOURCE);
+  TransitionTextureLocked(&t, plume::RenderTextureLayout::COPY_DEST);
   for (uint32_t z = 0; z < layers; ++z) {
     const uint32_t src_slice = std::min(z, t.depth - 1);
     const uint32_t src_y = source.scale.Size(src_slice * guest_stride_y);
@@ -1920,7 +1957,7 @@ uint32_t RawViewSlotLocked(HostTexture &t) {
   if (!t.texture)
     return kInvalidDescriptor;
   for (const HostTexture::SwizzleView &v : t.swizzle_views) {
-    if (v.swizzle == kRawKey)
+    if (v.swizzle == kRawKey && !v.srgb)
       return v.slot;
   }
   plume::RenderTextureViewDesc desc = t.view_desc;
@@ -2346,7 +2383,20 @@ TextureBinding BindTextureLocked(u32 texture_va, const TextureFetch &device_fetc
     fx->slot_texture = !depth_source && !stacked_source;  // banjo-nx (2026-10-27): RefreshBindingLocked's
   }
   binding.dimension = t.dimension;
-  binding.slot = SlotForSwizzle(t, swizzle);
+  const bool want_hw_srgb = !t.gpu_written && !depth_source && !stacked_source &&
+                            !(t.handed_from || t.held_current) && CanUseHwSrgb(t, device_fetch);
+  binding.hw_srgb = false;
+  if (want_hw_srgb) {
+    const uint32_t srgb_slot = SlotForSwizzle(t, swizzle, true);
+    if (srgb_slot != kInvalidDescriptor) {
+      binding.slot = srgb_slot;
+      binding.hw_srgb = true;
+    } else {
+      binding.slot = SlotForSwizzle(t, swizzle, false);
+    }
+  } else {
+    binding.slot = SlotForSwizzle(t, swizzle, false);
+  }
   // banjo-nx (2026-10-19, banjo_deko3d_depth_handover): its content where it is.
   if (t.handed_from || t.held_current) {
     const uint32_t handed = DepthHandOverSlotLocked(
@@ -2480,13 +2530,11 @@ void NoteColorResolveWrittenLocked(HostTexture &dest) {
   }
 }
 
-HostTexture *GetDepthResolveTextureLocked(u32 texture_va, RenderScale scale,
-                                          const d3d::TextureFetchConstant *header_format) {
-  TextureFetch fetch;
-  HostTexture *t =
-      ResolveTarget(texture_va, kDepthResolveFormat, scale, header_format, true, fetch);
-  if (!t)
-    return nullptr;
+bool EnsureDepthWordsTextureLocked(HostTexture *t) {
+  if (!t || !t->texture)
+    return false;
+  if (t->words && t->depth_framebuffer)
+    return true;
   if (!t->words) {
     auto words = std::make_unique<HostTexture>();
     words->width = t->width;
@@ -2502,20 +2550,34 @@ HostTexture *GetDepthResolveTextureLocked(u32 texture_va, RenderScale scale,
     words->texture = device->createTexture(desc);
     if (!TextureCreated(words->texture.get())) {
       ReportDeviceLost(device);
-      return nullptr;
+      return false;
     }
     words->texture->setName("renut depth resolve words");
     const plume::RenderTexture *targets[] = {t->texture.get(), words->texture.get()};
     t->depth_framebuffer = device->createFramebuffer(plume::RenderFramebufferDesc(targets, 2));
     if (!t->depth_framebuffer) {
       Video::RetireLocked(std::move(words->texture));
-      return nullptr;
+      return false;
     }
     if (plume::RenderCommandList *cmd = Video::CommandListLocked()) {
       TransitionTextureLocked(words.get(), plume::RenderTextureLayout::COLOR_WRITE);
       cmd->discardTexture(words->texture.get());
     }
     t->words = std::move(words);
+  }
+  return t->words && t->depth_framebuffer;
+}
+
+HostTexture *GetDepthResolveTextureLocked(u32 texture_va, RenderScale scale,
+                                          const d3d::TextureFetchConstant *header_format) {
+  TextureFetch fetch;
+  HostTexture *t =
+      ResolveTarget(texture_va, kDepthResolveFormat, scale, header_format, true, fetch);
+  if (!t)
+    return nullptr;
+  if (!t->words && (!banjo::renut_gpu::DmcDepthResolveFloatOnlyFbOn() || t->words_wanted)) {
+    if (!EnsureDepthWordsTextureLocked(t))
+      return nullptr;
   }
   HostTexture *&words_entry = g_depth_words[fetch.BasePage()];
   if (words_entry != t) {

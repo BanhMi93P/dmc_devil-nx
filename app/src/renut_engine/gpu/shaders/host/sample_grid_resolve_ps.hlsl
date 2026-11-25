@@ -16,10 +16,26 @@ float4 main(float4 position : SV_Position) : SV_Target0
     const int2 origin = (int2(position.xy) + int2(g_Push.translate)) * samples;
     const int2 last = int2(width, height) - 1;
     float4 sum = 0.0;
-    for (int y = 0; y < samples.y; ++y)
+    if (samples.x == 2 && samples.y == 2)
     {
-        for (int x = 0; x < samples.x; ++x)
-            sum += source.Load(int3(min(origin + int2(x, y), last), 0));
+        const int2 p0 = min(origin, last);
+        const int2 p1 = min(origin + int2(1, 1), last);
+        sum = source.Load(int3(p0.x, p0.y, 0)) + source.Load(int3(p1.x, p0.y, 0)) +
+              source.Load(int3(p0.x, p1.y, 0)) + source.Load(int3(p1.x, p1.y, 0));
+    }
+    else if (samples.x == 1 && samples.y == 2)
+    {
+        const int2 p0 = min(origin, last);
+        const int2 p1 = min(origin + int2(0, 1), last);
+        sum = source.Load(int3(p0.x, p0.y, 0)) + source.Load(int3(p0.x, p1.y, 0));
+    }
+    else
+    {
+        for (int y = 0; y < samples.y; ++y)
+        {
+            for (int x = 0; x < samples.x; ++x)
+                sum += source.Load(int3(min(origin + int2(x, y), last), 0));
+        }
     }
     // scale.x: the resolve's colour scale, 2^exponent bias (blur_renut_resolve_exp_bias, port 76's key 219; 1 without).
     return sum / float(samples.x * samples.y) * g_Push.scale.x;

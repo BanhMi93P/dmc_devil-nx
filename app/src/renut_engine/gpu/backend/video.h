@@ -27,7 +27,7 @@ namespace renut::gpu {
 
 constexpr uint32_t kFramesInFlight = 2;
 constexpr uint32_t kTextureDescriptorCount = 8192;
-constexpr uint32_t kSamplerDescriptorCount = 2048;  // dmc_devil-nx: 1024 hit 'Sampler table full' in Mission 1 (203 families)
+constexpr uint32_t kSamplerDescriptorCount = 4096;  // dmc_devil-nx Wave 4: raised from 2048 (hit 'Sampler table full') -> 4096 (818 families)
 constexpr uint32_t kInvalidDescriptor = UINT32_MAX;
 
 // Fixed bindless slots. The table is shared by the 2D, 3D and cube arrays the
@@ -219,6 +219,7 @@ struct VideoState {
   // shader (depth_resolve_float_ps).
   std::unique_ptr<plume::RenderShader> sasrt_depth_float_ps;
   std::unique_ptr<plume::RenderPipeline> sasrt_depth_float_pipeline;
+  std::unique_ptr<plume::RenderPipeline> sasrt_depth_float_only_pipeline;
   // Host mip levels of scaled resolve destinations (textures.cpp); null when
   // it failed to build, which leaves them single-level.
   std::unique_ptr<plume::RenderShader> texture_mip_ps;

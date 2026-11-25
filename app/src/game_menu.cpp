@@ -27,6 +27,7 @@
 
 #include "game_menu_fonts.h"
 #include "game_menu_text.h"  // blur-nx (2026-11-18): the menu's text in the Xbox 360's twelve languages
+#include "renut_engine/gpu/banjo_renut_tuning.h"  // RequestFrameDiagCapture
 
 #include <rex/system/flags.h>              // rex::system::EffectiveLanguage
 #include <rex/system/util/xdbf_utils.h>    // the game's own languages (its XDBF)  // blur-nx (2026-11-18): Dear ImGui's misc/fonts, embedded by CMake (app/CMakeLists.txt)
@@ -391,33 +392,48 @@ std::vector<Setting> MakeSettings(const std::string& file) {
   add(T_LANGUAGE, "language", true, languages, 0, Tr(H_LANGUAGE));
   add(T_FRAMERATE, "frame_cap", false, {Q("30 fps", "30"), Q("60 fps", "60"), Q(Tr(C_OFF), "Off")}, 0,
       Tr(H_FRAMERATE));
+  add(T_VSYNC, "renut_vsync", false, on_off(), 1, Tr(H_VSYNC));
   add(T_HANDHELD, "banjo_renut_render_height_handheld", false,
-      {C("960x540", "540", "540"), C("1024x576", "576", "576"), C("1088x612", "612", "612"),
-       C("1152x648", "648", "648"), C("1216x684", "684", "684"), C("1280x720", "720", "720")},
-      5, Tr(H_HANDHELD));
+      {C("853x480 (480p)", "480", "480"), C("960x540 (540p)", "540", "540"), C("1024x576", "576", "576"),
+       C("1088x612", "612", "612"), C("1152x648", "648", "648"), C("1216x684", "684", "684"),
+       C("1280x720 (720p)", "720", "720")},
+      6, Tr(H_HANDHELD));
   // rr6-nx (2026-11-22, the user: "a separate toggle for handheld and docked dynamic resolution"): each mode's switch
   // under its fixed resolution; the help says its range (banjo_renut_dynamic_*_low / _high, as set).
   const auto lines = [](const char *key) { return std::atoi(rex::cvar::GetFlagByName(key).c_str()); };
   add(T_DYN_HANDHELD, "banjo_renut_dynamic_resolution_handheld", false, on_off(), 1,
       TrDD(H_DYN_HANDHELD, lines("banjo_renut_dynamic_handheld_low"), lines("banjo_renut_dynamic_handheld_high")));
   add(T_DOCKED, "banjo_renut_render_height_docked", false,
-      {C("1280x720", "720", "720"), C("1408x792", "792", "792"), C("1536x864", "864", "864"),
-       C("1600x900", "900", "900"), C("1664x936", "936", "936"), C("1728x972", "972", "972"),
-       C("1792x1008", "1008", "1008"), C("1920x1080", "1080", "1080")},
-      5, Tr(H_DOCKED));
-  add(T_DYN_DOCKED, "banjo_renut_dynamic_resolution_docked", false, on_off(), 0,
+      {C("853x480 (480p)", "480", "480"), C("960x540 (540p)", "540", "540"), C("1280x720 (720p)", "720", "720"),
+       C("1408x792", "792", "792"), C("1536x864", "864", "864"), C("1600x900", "900", "900"),
+       C("1664x936", "936", "936"), C("1728x972", "972", "972"), C("1792x1008", "1008", "1008"),
+       C("1920x1080 (1080p)", "1080", "1080")},
+      2, Tr(H_DOCKED));
+  add(T_DYN_DOCKED, "banjo_renut_dynamic_resolution_docked", false, on_off(), 1,
       TrDD(H_DYN_DOCKED, lines("banjo_renut_dynamic_docked_low"), lines("banjo_renut_dynamic_docked_high")));
   add(T_RUMBLE, "input_rumble", false, on_off(), 0, Tr(H_RUMBLE), /*always_in_file=*/false);
-  add(T_SMAA, "banjo_renut_smaa", false, on_off(), 0, Tr(H_SMAA));
+  add(T_SMAA, "banjo_renut_smaa", false, on_off(), 1, Tr(H_SMAA));
   // katamari-nx (2026-11-24, the user: "Make sure 4xmsaa is on by default"): Katamari's default is 4x (its toml and
   // built-in settings), so the menu's reset gives 4x there; the base's default stays off (port 118).
-#if defined(KATAMARI_BUILTIN_CONFIG)
-  constexpr int kMsaaDefault = 2;
-#else
   constexpr int kMsaaDefault = 0;
-#endif
   add(T_MSAA, "msaa_level", false, {C(Tr(C_OFF), "1", "1"), C("2x", "2", "2"), C("4x", "4", "4")}, kMsaaDefault,
       Tr(H_MSAA));
+  auto shadow_choices = [&] {
+    return std::vector<Choice>{Q("1.0x", "1.0x"), Q("0.67x", "0.67x"), Q(Tr(C_OFF), "Off")};
+  };
+  add(T_ENV_SHADOWS, "dmc_env_shadows", false, shadow_choices(), 1, Tr(H_ENV_SHADOWS));
+  add(T_CHAR_SHADOWS, "dmc_char_shadows", false, shadow_choices(), 1, Tr(H_CHAR_SHADOWS));
+  add(T_SHOW_FPS, "banjo_show_fps", false, on_off(), 1, Tr(H_SHOW_FPS), /*always_in_file=*/false);
+  add(T_SHOW_PROFILER, "banjo_show_profiler", false, on_off(), 1, Tr(H_SHOW_PROFILER), /*always_in_file=*/false);
+  {
+    Setting diag;
+    diag.label = Tr(T_FRAME_DIAG);
+    diag.key = "#frame_diag";
+    diag.always_in_file = false;
+    diag.choices = {C(Tr(C_CAPTURE), "", "")};
+    diag.help = Tr(H_FRAME_DIAG);
+    s.push_back(std::move(diag));
+  }
   // blur-nx (2026-11-18, the user: "make 4 core mode an option ... on by default and a warning that it is highly
   // reccomended to be left on").
   add(T_FOURCORE, "four_core_mode", true, on_off(), 0, Tr(H_FOURCORE));
@@ -427,8 +443,8 @@ std::vector<Setting> MakeSettings(const std::string& file) {
   // blur-nx (2026-11-18, the user: "add an option to the config please exposed to the user to change the button config
   // combo to open the menu"): input_menu_combo; any other set in the file shows as it is written.
   add(T_MENUBUTTONS, "input_menu_combo", false,
-      {Q("A+B+X+Y+L+R", "A+B+X+Y+L+R"), Q("L+R+(-)", "L+R+MINUS"), Q("L+R+(+)", "L+R+PLUS"),
-       Q("ZL+ZR+(-)", "ZL+ZR+MINUS"), Q(Tr(C_STICKS), "LSTICK+RSTICK")},
+      {Q("(+)+(-)", "PLUS+MINUS"), Q("A+B+X+Y+L+R", "A+B+X+Y+L+R"), Q("L+R+(-)", "L+R+MINUS"),
+       Q("L+R+(+)", "L+R+PLUS"), Q("ZL+ZR+(-)", "ZL+ZR+MINUS"), Q(Tr(C_STICKS), "LSTICK+RSTICK")},
       0, TrS(H_MENUBUTTONS, file.c_str()));
   // blur-nx (2026-11-18, the user's requests): the menu's colour and font, both at once.
   add(T_MENUCOLOR, "menu_color", false,
@@ -439,7 +455,7 @@ std::vector<Setting> MakeSettings(const std::string& file) {
   for (Setting& x : s)  // the render targets are made anew for these: once, when the menu closes
     if (x.key == "banjo_renut_render_height_handheld" || x.key == "banjo_renut_render_height_docked" ||
         x.key == "banjo_renut_dynamic_resolution_handheld" || x.key == "banjo_renut_dynamic_resolution_docked" ||
-        x.key == "msaa_level")
+        x.key == "msaa_level" || x.key == "dmc_env_shadows" || x.key == "dmc_char_shadows")
       x.apply_on_close = true;
   add(T_MENUFONT, "menu_font", false,
       {Q(Tr(C_SYSTEM), "System"), Q(Tr(C_PIXEL), "Pixel"), Q("Roboto", "Roboto"), Q("Karla", "Karla"),
@@ -483,6 +499,9 @@ const XboxButton kXboxButtons[] = {
     {nullptr, C_DPAD_RIGHT, "right", "RIGHT", "RIGHT"},
 };
 constexpr const char* kResetKey = "#reset";
+constexpr const char* kFrameDiagKey = "#frame_diag";
+
+inline bool IsActionKey(const std::string& key) { return key == kResetKey || key == kFrameDiagKey; }
 
 const char* XboxButtonName(const XboxButton& b) { return b.label ? b.label : Tr(b.label_id); }
 
@@ -742,7 +761,7 @@ void GameMenuDialog::LoadValues() {
       controls_[p] = MakeControls(p);
   }
   auto load = [&](Setting& s) {
-    if (s.key == kResetKey)
+    if (IsActionKey(s.key))
       return;
     // A * setting keeps what was chosen for the next start; the others show what the game runs with now.
     if (loaded_ && (s.restart || s.dirty))
@@ -763,6 +782,10 @@ void GameMenuDialog::LoadValues() {
 }
 
 void GameMenuDialog::Change(Setting& s, int step) {
+  if (s.key == kFrameDiagKey) {
+    banjo::renut_gpu::RequestFrameDiagCapture();
+    return;
+  }
   if (s.key == kResetKey) {
     for (auto& player : controls_)
       if (&player.back() == &s)
@@ -814,7 +837,7 @@ void GameMenuDialog::Apply(Setting& s) {
 void GameMenuDialog::Save() {
   std::vector<FileEdit> edits;
   auto collect = [&](Setting& s) {
-    if (!s.dirty || s.key == kResetKey || s.value < 0)
+    if (!s.dirty || IsActionKey(s.key) || s.value < 0)
       return;
     s.dirty = false;
     FileEdit e;
@@ -1076,9 +1099,9 @@ void GameMenuDialog::DrawSettingsRows(std::vector<Setting>& rows, bool controls,
     ImGui::InvisibleButton("##row", ImVec2(width, row_height_));
     if (ImGui::IsItemClicked() && state_ == State::kOpen) {
       const float mx = ImGui::GetIO().MousePos.x - p.x;
-      if (s.key != kResetKey && mx >= value_x && mx < value_x + arrow_w)
+      if (!IsActionKey(s.key) && mx >= value_x && mx < value_x + arrow_w)
         Change(s, -1);
-      else if (mx >= value_x + value_w - arrow_w || (sel && mx >= value_x) || s.key == kResetKey)
+      else if (mx >= value_x + value_w - arrow_w || (sel && mx >= value_x) || IsActionKey(s.key))
         Change(s, +1);
       selected = int(i);
     }
@@ -1107,7 +1130,7 @@ void GameMenuDialog::DrawSettingsRows(std::vector<Setting>& rows, bool controls,
     }
     // The value, between its arrows.
     std::string value;
-    if (s.key == kResetKey) {
+    if (IsActionKey(s.key)) {
       value = s.choices[0].label;
     } else if (s.value < 0) {
       value = s.custom;
@@ -1123,7 +1146,7 @@ void GameMenuDialog::DrawSettingsRows(std::vector<Setting>& rows, bool controls,
     const ImVec2 vs = ImGui::CalcTextSize(value.c_str());
     const float vx = p.x + value_x + (value_w - vs.x) * 0.5f;
     dl->AddText(ImVec2(vx, ty), U32(warn ? kWarn : pending ? kPending : (sel ? kAccent : kText)), value.c_str());
-    if (sel && s.key != kResetKey) {
+    if (sel && !IsActionKey(s.key)) {
       const float cy = p.y + row_height_ * 0.5f, h = font * 0.32f;
       const float lx = p.x + value_x + arrow_w * 0.35f, rx = p.x + value_x + value_w - arrow_w * 0.35f;
       dl->AddTriangleFilled(ImVec2(lx, cy), ImVec2(lx + h * 1.3f, cy - h), ImVec2(lx + h * 1.3f, cy + h), U32(kAccent));

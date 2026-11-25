@@ -143,7 +143,8 @@ void SetUserDataRoot(const fs::path &root) {
 void InstallPackages(rex::Runtime *runtime) {
     if (!runtime || !runtime->kernel_state())
         return;
-    if (!REXCVAR_GET(katamari_dlc_unlock_packs)) {
+    const uint32_t title_id = runtime->kernel_state()->title_id();
+    if (title_id == 0x4E4D07DBu && !REXCVAR_GET(katamari_dlc_unlock_packs)) {
         std::string &hidden = REXCVAR_GET(dlc_hidden);
         for (const char *name : kKatamariUnlockPacks) {
             if (!hidden.empty())
@@ -172,8 +173,6 @@ void InstallPackages(rex::Runtime *runtime) {
     if (files.empty())
         return;
 
-    const uint32_t title_id = runtime->kernel_state()->title_id();
-    // rr6-nx: not in 'folder', which may point at the packages where they lie: nothing is written there.
     const fs::path list_path =
         (g_user_data_root.empty() ? rex::filesystem::GetExecutableFolder() : g_user_data_root) / kInstalledList;
     std::vector<std::string> installed = ReadInstalledList(list_path);
@@ -199,35 +198,33 @@ void InstallPackages(rex::Runtime *runtime) {
                       package.content_type);
             continue;
         }
-        // rr6-nx (2026-11-18): read in place, whether installed now or before.
-        runtime->kernel_state()->content_manager()->RegisterPackageFile(file_name, path);
-        ++registered;
-        if (!g_user_data_root.empty() && fs::is_directory(UnpackedFolder(title_id, file_name), ec)) {
-            ++unpacked_folders;
-            for (const auto &f : fs::recursive_directory_iterator(UnpackedFolder(title_id, file_name),
-                                                                  fs::directory_options::skip_permission_denied, ec))
-                if (f.is_regular_file(ec))
-                    unpacked_bytes += f.file_size(ec);
-        }
-        const uintmax_t size = fs::file_size(path, ec);
-        const std::string entry = ListEntry(file_name, size);
         const fs::path header = InstalledHeader(title_id, file_name);
+        const fs::path unpacked = UnpackedFolder(title_id, file_name);
+        const std::string entry = ListEntry(file_name, fs::file_size(path, ec));
+        ec.clear();
         const bool listed = std::find(installed.begin(), installed.end(), entry) != installed.end();
         const bool header_there = !header.empty() && fs::exists(header, ec);
-        if (header_there || (header.empty() && listed)) {
+        const bool dir_there = g_user_data_root.empty() || fs::is_directory(unpacked, ec);
+        if ((header_there && dir_there) || (header.empty() && listed)) {
             ++present;
             continue;
         }
 
-        RNUT_INFO("DLC: installing {} ({})...", package.name, file_name);
+        RNUT_INFO("DLC: extracting {} ({})...", package.name, file_name);
         const std::string utf8 = rex::path_to_utf8(path);
         const auto result =
-            runtime->kernel_state()->content_manager()->InstallContent(utf8.c_str(), /*extract_files=*/false);
+            runtime->kernel_state()->content_manager()->InstallContent(utf8.c_str(), /*extract_files=*/true);
         if (result != 0) {
             RNUT_ERROR("DLC: {} ({}) did not install (error {:08X})", package.name, file_name, unsigned(result));
             continue;
         }
-        RNUT_INFO("DLC: {} installed", package.name);
+        fs::remove(path, ec);
+        if (ec) {
+            RNUT_WARN("DLC: installed {} but could not remove raw file ({})", file_name, ec.message());
+            ec.clear();
+        } else {
+            RNUT_INFO("DLC: {} installed & raw file removed", package.name);
+        }
         ++newly;
         if (!listed) {
             installed.push_back(entry);

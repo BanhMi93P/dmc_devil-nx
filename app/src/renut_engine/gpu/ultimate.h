@@ -58,4 +58,5 @@ bool DiagFormatsOn();  // renut_diag_formats (sasrt-nx; the diagnostic, logging 
 bool ZeroLevelRecheckOn();  // dishonored_renut_zero_level_recheck (dishonored-nx; port 104)
 bool VertexReadableCheckOn();  // dishonored_renut_vertex_readable_check (dishonored-nx; port 101)
 bool Clamp7e3On();  // dishonored_renut_clamp_7e3 (dishonored-nx; port 106)
+bool DmcHwSrgbOn();  // dmc_gpu_hw_srgb (dmc_devil-nx; Wave 3 hardware sRGB views)
 }  // namespace banjo::renut_gpu

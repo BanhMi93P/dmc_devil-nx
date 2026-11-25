@@ -4732,6 +4732,60 @@ UniformJoins::uniform(Value *v, int depth)
       case OP_POPCNT: case OP_INSBF: case OP_EXTBF: case OP_BFIND: case OP_PERMT:
          u = true;
          break;
+      case OP_PHI: {
+         const BasicBlock *phiBB = i->bb;
+         BasicBlock *idBB = phiBB ? phiBB->idom() : NULL;
+         if (!phiBB || !idBB)
+            break;
+         std::vector<const BasicBlock *> work;
+         std::unordered_map<const BasicBlock *, bool> visited;
+         visited[phiBB] = true;
+         for (Graph::EdgeIterator ei = phiBB->cfg.incident(); !ei.end(); ei.next()) {
+            const BasicBlock *p = BasicBlock::get(ei.getNode());
+            if (p && p != idBB && !visited.count(p)) {
+               visited[p] = true;
+               work.push_back(p);
+            }
+         }
+         bool domUniform = true;
+         while (domUniform && !work.empty()) {
+            if (visited.size() > 32) {
+               domUniform = false;
+               break;
+            }
+            const BasicBlock *cur = work.back();
+            work.pop_back();
+            if (cur->cfg.outgoingCount() > 1) {
+               Instruction *ex = const_cast<BasicBlock *>(cur)->getExit();
+               if (!ex || ex->op != OP_BRA || !ex->isPredicated() || !uniform(ex->getPredicate(), depth + 1)) {
+                  domUniform = false;
+                  break;
+               }
+            }
+            bool hasPred = false;
+            for (Graph::EdgeIterator pe = cur->cfg.incident(); !pe.end(); pe.next()) {
+               hasPred = true;
+               const BasicBlock *pr = BasicBlock::get(pe.getNode());
+               if (!pr) {
+                  domUniform = false;
+                  break;
+               }
+               if (pr != idBB && !visited.count(pr)) {
+                  visited[pr] = true;
+                  work.push_back(pr);
+               }
+            }
+            if (!hasPred)
+               domUniform = false;
+         }
+         if (domUniform && idBB->cfg.outgoingCount() > 1) {
+            Instruction *ex = idBB->getExit();
+            if (!ex || ex->op != OP_BRA || !ex->isPredicated() || !uniform(ex->getPredicate(), depth + 1))
+               domUniform = false;
+         }
+         u = domUniform;
+         break;
+      }
       default:
          break;
       }

@@ -727,9 +727,9 @@ constexpr SamplerStateFn kSamplerStateFns[kSamplerStates] = {
     SsPointBorderEnable,    // 19
 };
 
-// DmC's state tables: {getter, setter, default} per state.
-constexpr u32 kRenderStateTable = 0x835D4A10;
-constexpr u32 kSamplerStateTable = 0x835D4ED0;
+// DmC TU1 state tables: {getter, setter, default} per state.
+constexpr u32 kRenderStateTable = 0x835D4A20;
+constexpr u32 kSamplerStateTable = 0x835D4EE0;
 constexpr u32 kTextureSamplers = 26;
 
 u32 TableWord(u32 table, u32 index, u32 field) {
@@ -1368,8 +1368,8 @@ void InvalidateConstantsAndWait(Device device) {
 namespace {
 
 // Per D3DFORMAT (low 6 bits) its format description; 0xF00 marks a float
-// depth format.
-constexpr u32 kFormatTable = 0x8227A0E0;
+// depth format (TU1: 0x8227B800).
+constexpr u32 kFormatTable = 0x8227B800;
 // The register packets between RB_COPY_CONTROL and RB_COPY_DEST_INFO.
 constexpr u32 kCopyControl = 0x2A18;
 constexpr u32 kCopyDestInfo = 0x2A24;
