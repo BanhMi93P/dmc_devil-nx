@@ -7,6 +7,7 @@
  * @copyright   Copyright (c) 2026 Tom Clay <tomc@tctechstuff.com>
  * @license     BSD 3-Clause License
  */
+#include <atomic>
 #include <cstring>
 
 #include <rex/cvar.h>
@@ -30,19 +31,29 @@ namespace rex::kernel::crt {
 // routines' stores would have.
 using rex::memory::MarkStoreCardsHost;
 
-static void* native_memcpy(void* dst, const void* src, size_t n) {
+// dmc_devil-nx: publish the copied/filled bytes before zeroing store cards so PagesClean cannot observe a zeroed
+// card on the render thread before the payload write lands, then mark cards again if anything overwrote during copy.
+static inline void MarkStoreCardsAfterWrite(const void* dst, size_t n) {
+  std::atomic_thread_fence(std::memory_order_release);
   MarkStoreCardsHost(dst, n);
-  return std::memcpy(dst, src, n);
+}
+
+static void* native_memcpy(void* dst, const void* src, size_t n) {
+  void* r = std::memcpy(dst, src, n);
+  MarkStoreCardsAfterWrite(dst, n);
+  return r;
 }
 
 static void* native_memmove(void* dst, const void* src, size_t n) {
-  MarkStoreCardsHost(dst, n);
-  return std::memmove(dst, src, n);
+  void* r = std::memmove(dst, src, n);
+  MarkStoreCardsAfterWrite(dst, n);
+  return r;
 }
 
 static void* native_memset(void* dst, int val, size_t n) {
-  MarkStoreCardsHost(dst, n);
-  return std::memset(dst, val, n);
+  void* r = std::memset(dst, val, n);
+  MarkStoreCardsAfterWrite(dst, n);
+  return r;
 }
 
 static void* native_memchr(const void* ptr, int val, size_t n) {
@@ -54,28 +65,30 @@ static void* native_memchr(const void* ptr, int val, size_t n) {
 // ---------------------------------------------------------------------------
 
 static void* native_XMemCpy(void* dst, const void* src, size_t n) {
-  MarkStoreCardsHost(dst, n);
   // Port 146 (crt_xmemcpy_as_memmove): a game's own block copy hooked here may be called with overlapping ranges
   // that its forward copy handled.
   static const bool as_memmove = REXCVAR_GET(crt_xmemcpy_as_memmove);
-  if (as_memmove)
-    return std::memmove(dst, src, n);
-  return std::memcpy(dst, src, n);
+  void* r = as_memmove ? std::memmove(dst, src, n) : std::memcpy(dst, src, n);
+  MarkStoreCardsAfterWrite(dst, n);
+  return r;
 }
 
 static void* native_XMemSet(void* dst, int val, size_t n) {
-  MarkStoreCardsHost(dst, n);
-  return std::memset(dst, val, n);
+  void* r = std::memset(dst, val, n);
+  MarkStoreCardsAfterWrite(dst, n);
+  return r;
 }
 
 static void* native_XMemSet128(void* dst, int val, size_t n) {
-  MarkStoreCardsHost(dst, n);
-  return std::memset(dst, val, n);
+  void* r = std::memset(dst, val, n);
+  MarkStoreCardsAfterWrite(dst, n);
+  return r;
 }
 
 static void* native_memset_vmx(void* dst, int val, size_t n) {
-  MarkStoreCardsHost(dst, n);
-  return std::memset(dst, val, n);
+  void* r = std::memset(dst, val, n);
+  MarkStoreCardsAfterWrite(dst, n);
+  return r;
 }
 
 // ---------------------------------------------------------------------------
@@ -85,16 +98,16 @@ static void* native_memset_vmx(void* dst, int val, size_t n) {
 static int native_memcpy_s(void* dst, size_t dstsz, const void* src, size_t count) {
   if (!dst || !src || count > dstsz)
     return 22;  // EINVAL
-  MarkStoreCardsHost(dst, count);
   std::memcpy(dst, src, count);
+  MarkStoreCardsAfterWrite(dst, count);
   return 0;
 }
 
 static int native_memmove_s(void* dst, size_t dstsz, const void* src, size_t count) {
   if (!dst || !src || count > dstsz)
     return 22;  // EINVAL
-  MarkStoreCardsHost(dst, count);
   std::memmove(dst, src, count);
+  MarkStoreCardsAfterWrite(dst, count);
   return 0;
 }
 

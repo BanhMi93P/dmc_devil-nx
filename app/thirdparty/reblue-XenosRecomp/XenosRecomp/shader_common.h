@@ -819,14 +819,16 @@ float4 banjoTrim(float4 c, uint target)
     const uint bias = (g_banjoTargetBias >> (target * 6u)) & 0x3Fu;
     const float biasScale = bias != 0u ? pow(2.0, float(int(bias << 26u) >> 26)) : 1.0;
     // blur-nx (2026-11-17): the colour scaled first, as the GPU does before the format's encode (constant 927 above).
-    if (bias != 0u && g_banjoTargetBiasRgb != 0u)
+    if (bias != 0u && (g_banjoTargetBiasRgb & 1u) != 0u)
         c.xyz *= biasScale;
     if (((g_banjoTargetGamma >> target) & 1u) != 0u)
         c.xyz = renutLinearToGamma(c.xyz);
     // Saturated: the alpha of the formats that use a bias is unorm on the console (2 bits in 2_10_10_10_FLOAT), and a blend
     // reads what the target can hold. A shader that does not divide its alpha by the bias would blend past 1 here.
+    // dmc_devil-nx: wide-alpha targets (16_16_16_16 / 16_16_16_16_FLOAT, flagged in bits 1..4 of constant 927) keep the
+    // biased alpha unclamped so the subsequent resolve divides back to the intended weight (e.g. half-res UE3 DOF).
     if (bias != 0u)
-        c.w = saturate(c.w * biasScale);
+        c.w = ((g_banjoTargetBiasRgb >> (target + 1u)) & 1u) != 0u ? (c.w * biasScale) : saturate(c.w * biasScale);
     const uint m = (g_banjoOutputTrim >> (target * 4u)) & 0xFu;
     const float v = g_banjoTrimPoison != 0u ? 60000.0 : 0.0;
     return select(bool4((m & 1u) != 0u, (m & 2u) != 0u, (m & 4u) != 0u, (m & 8u) != 0u), float4(v, v, v, v), c);

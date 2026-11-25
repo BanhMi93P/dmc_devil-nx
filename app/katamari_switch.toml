@@ -24,6 +24,10 @@ input_xbox_layout = false
 input_joycon_sideways = true
 input_rumble = true
 
+# Renderer overrides (UE3 half-res DOF wipe & dynamic VB kick reuse)
+blur_renut_wipe_overwritten = true
+banjo_renut_kick_reuse = false
+
 # Logging (set log_level = "info" and log_file_writer = true to capture logs in logs/rex/)
 log_level = "info"
 log_file_writer = true

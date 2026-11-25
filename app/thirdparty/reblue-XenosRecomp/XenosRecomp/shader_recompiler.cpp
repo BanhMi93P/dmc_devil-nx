@@ -1029,6 +1029,11 @@ void ShaderRecompiler::recompile(const AluInstruction& instr)
 
                 case AluVectorOpcode::Dp4:
                 case AluVectorOpcode::Max4:
+                case AluVectorOpcode::KillEq:
+                case AluVectorOpcode::KillGt:
+                case AluVectorOpcode::KillGe:
+                case AluVectorOpcode::KillNe:
+                case AluVectorOpcode::Dst:
                     mask = 0b1111;
                     break;
 

@@ -432,9 +432,12 @@ std::unique_ptr<plume::RenderPipeline> Build(const PipelineKey &key, const Pipel
   if (key.pixel_shader && (key.reserved >> 8)) {
     spec[spec_count++] = plume::RenderSpecConstant(925, key.reserved >> 8);
     // blur-nx (2026-11-17, blur_renut_target_bias_rgb): the colour scaled by the bias too (shader_common.h, constant 927).
-    // One value for the whole run, so not in the key: a variant is keyed by the values of the constants it declares.
-    if (banjo::renut_gpu::TargetBiasRgbOn())
-      spec[spec_count++] = plume::RenderSpecConstant(927, 1);
+    // dmc_devil-nx: bits 1..4 mark wide-alpha targets (16_16_16_16 / 16_16_16_16_FLOAT) via sasrt_words[7] bits 24..27
+    // so banjoTrim skips saturating alpha to 1.0 when biasScale multiplies before a resolve divides back.
+    const uint32_t wide_alpha = (key.sasrt_words[7] >> 24) & 0xFu;
+    const uint32_t bias_flags = (banjo::renut_gpu::TargetBiasRgbOn() ? 1u : 0u) | (wide_alpha << 1);
+    if (bias_flags)
+      spec[spec_count++] = plume::RenderSpecConstant(927, bias_flags);
   }
   // banjo-nx (banjo_gpu_output_trim): the colour channels the pixel shader leaves 0.
   if (key.output_trim) {
@@ -1269,7 +1272,8 @@ SpecState SpecialisedPipeline(const PipelineKey &key, uint64_t hash, const HostV
 bool Specialised(const PipelineKey &key) {
   if (key.alpha_func || key.tess_kind || key.fetch_pad)  // port 44: fetch_pad, constant 926
     return true;
-  for (const uint32_t w : key.sasrt_words) {  // sasrt-nx (2026-11-08, the third round)
+  for (size_t i = 0; i < std::size(key.sasrt_words); ++i) {  // sasrt-nx (2026-11-08, the third round)
+    const uint32_t w = (i == 7) ? (key.sasrt_words[7] & ~0x0F000000u) : key.sasrt_words[i];
     if (w)
       return true;
   }
@@ -1517,6 +1521,7 @@ static plume::RenderPipeline *GetPipelineSlow(const PipelineKey &key, const Pipe
     generic.tess_kind = 0;
     generic.fetch_pad = 0;  // port 44 (sasrt_gpu_plain_fetches)
     std::memset(generic.sasrt_words, 0, sizeof(generic.sasrt_words));  // sasrt-nx (2026-11-08, the third round)
+    generic.sasrt_words[7] = key.sasrt_words[7] & 0x0F000000u;
     plume::RenderPipeline *pipeline = GetPipelineLocked(generic, inputs);
     if (state == SpecState::Pending) {
       SpecPending &p = g_spec_pending[hash];

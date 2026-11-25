@@ -16,6 +16,8 @@ banjo_renut_dynamic_texture_rows = false
 banjo_renut_keep_unused_targets = false
 blur_renut_texture_pool = false
 banjo_renut_stream_redeem = false
+blur_renut_wipe_overwritten = true
+banjo_renut_kick_reuse = false
 
 # ARM64 memory-ordering & IO safety (UE3 on Cortex-A57)
 blur_guest_cas_relaxed = false

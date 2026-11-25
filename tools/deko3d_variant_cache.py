@@ -303,6 +303,14 @@ def read_list(path, blend_skip_on, alpha_guess=ALPHA_GUESS):
             tail[900] = blend_skip
         if output_trim:
             tail[901] = output_trim
+        # blur-nx (2026-11-17): halo3-nx's target constants, as render/pipeline.cpp gives them: the gamma targets (924, the
+        # key's reserved bits 4-7) and the colour exponent biases (925, bits 8-31), with blur_renut_target_bias_rgb's 927 (on
+        # by default) beside 925, plus wide-alpha flags from sw[7] bits 24-27. Both spec and generic tail carry 924/925/927.
+        if ps and (reserved >> 4) & 0xF:
+            tail[924] = (reserved >> 4) & 0xF
+        if ps and reserved >> 8:
+            tail[925] = reserved >> 8
+            tail[927] = 1 | (((sw[7] >> 24) & 0xF) << 1)
         spec = dict(tail)
         if alpha_func:
             spec[903] = alpha_func
@@ -350,14 +358,6 @@ def read_list(path, blend_skip_on, alpha_guess=ALPHA_GUESS):
                     spec[966 + r] = ec
         if no_clip:
             spec[929] = 0
-        # blur-nx (2026-11-17): halo3-nx's target constants, as render/pipeline.cpp gives them: the gamma targets (924, the
-        # key's reserved bits 4-7) and the colour exponent biases (925, bits 8-31), with blur_renut_target_bias_rgb's 927 (on
-        # by default) beside 925. Not here before: those pipelines' variants were compiled on the device every time.
-        if ps and (reserved >> 4) & 0xF:
-            spec[924] = (reserved >> 4) & 0xF
-        if ps and reserved >> 8:
-            spec[925] = reserved >> 8
-            spec[927] = 1
         for w in range(8):
             for b in range(32):
                 if mask[w] >> b & 1:
@@ -374,7 +374,7 @@ def read_list(path, blend_skip_on, alpha_guess=ALPHA_GUESS):
             out.append((hashes, {k: v for k, v in spec.items() if not 950 <= k <= 973}))
             out.append((hashes, {k: v for k, v in spec.items() if not 958 <= k <= 973}))
             out.append((hashes, {k: v for k, v in spec.items() if not 950 <= k <= 957}))
-        if any(mask) or alpha_func or tess_kind or any(fetch_types) or plain or no_clip or any(sw):
+        if any(mask) or alpha_func or tess_kind or any(fetch_types) or plain or no_clip or any((sw[i] & ~0x0F000000) if i == 7 else sw[i] for i in range(len(sw))):
             out.append((hashes, tail))  # the generic pipeline a specialised key draws with until it is built
         made = [spec]
         if not alpha_func and ps:

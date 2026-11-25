@@ -170,7 +170,9 @@ REXCVAR_DEFINE_BOOL(banjo_renut_diag_repeat_census, false, "Banjo/Diagnostics",
                     "and call, and (for each target) with the same constants and guest data too, by shadow maps "
                     "(depth targets alone) and the rest. Costs a few ms in those two frames")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
-REXCVAR_DEFINE_BOOL(banjo_renut_kick_reuse, true, "Banjo/Enhancements",
+// dmc_devil-nx: UE3 updates dynamic vertex buffers up until KickOff, which can overwrite buffers reused across kicks
+// before KickHeld's draw-time card check catches it (causing Mundus's face to snap between poses). Default off.
+REXCVAR_DEFINE_BOOL(banjo_renut_kick_reuse, false, "Banjo/Enhancements",
                     "Renut's renderer (2026-10-23, batch 6): a fetch-data copy or converted vertex stream an earlier "
                     "kick of the frame made is drawn again instead of a new one when the store cards prove its guest "
                     "bytes unchanged since (the same bytes; with banjo_renut_store_cards_verify they are compared too)")
@@ -8056,6 +8058,18 @@ void ForgetSpecKeepLocked() { g_spec_keep.valid = false; }
                                                               const FloatConstants *vsc = nullptr,
                                                               const Targets *targets = nullptr) {
   SasrtSpecWords s{};
+  // dmc_devil-nx: [7] bits 24-27, colour target i is a wide-alpha format (k_16_16_16_16 = 5 or
+  // k_16_16_16_16_FLOAT = 7) with nonzero colour exponent bias: banjoTrim must not saturate alpha to 1.0
+  // before the resolve divides by 2^bias (UE3 half-res DOF alpha weight, spec constant 927 bits 1..4).
+  if (ps_entry && targets) {
+    for (u32 i = 0; i < targets->color_count && i < 4; ++i) {
+      const HostSurface *c = targets->colors[i];
+      if (!c) continue;
+      const u32 fmt = (c->color_info_word >> 16) & 0xFu;
+      if ((fmt == 5u || fmt == 7u) && ((c->color_info_word >> 20) & 0x3Fu) != 0u)
+        s.w[7] |= (1u << (24u + i));
+    }
+  }
   if (!IsDeko3D())
     return s;
   // dishonored-nx (2026-10-31, dishonored_renut_clamp_7e3; port 106): [7] bits 28-31, colour target i a
